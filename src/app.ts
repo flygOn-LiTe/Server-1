@@ -1,3 +1,5 @@
+//go
+
 import fs from 'fs';
 
 import { startManagementWeb, startWeb, web } from '#/web.js';
