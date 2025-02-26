@@ -7,6 +7,10 @@ COPY . /app
 
 RUN npm install
 
+# --- Prisma commands to generate client and deploy migrations ---
+RUN npx prisma generate
+RUN npx prisma migrate deploy
+
 EXPOSE 8888
 EXPOSE 43594
 

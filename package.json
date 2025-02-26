@@ -18,7 +18,6 @@
         "db:schema": "prisma migrate dev --schema prisma/multiworld/schema.prisma",
         "dev": "tsx watch --clear-screen=false --include \"src/*\" src/app.ts",
         "friend": "tsx src/friend.ts",
-        "postinstall": "prisma generate && prisma migrate deploy",
         "lint": "eslint --no-warn-ignored src tools",
         "lint:staged": "eslint --no-warn-ignored",
         "logger": "tsx src/logger.ts",
