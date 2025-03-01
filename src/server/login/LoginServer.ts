@@ -24,7 +24,7 @@ export default class LoginServer {
             })
         );
     }
-    //test123
+
     async wouldResetSaveFile(newSaveBytes: Buffer, profile: string, username: string) {
         // check whether `save`, if saved to disk, would have reset `username`'s progress.
         // it does this by checking whether the player's tick count has gone backwards.
