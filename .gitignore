@@ -60,3 +60,4 @@ Thumbs.db
 ### macOS ###
 .DS_Store
 ._*
+/data/players/main
