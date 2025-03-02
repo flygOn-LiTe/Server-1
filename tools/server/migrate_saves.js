@@ -1,27 +1,28 @@
 import path from 'path';
 import fsp from 'fs/promises';
-import { db } from '#/db/query.js';
+import { db } from '#/db/query.ts';
 
 const SAVE_DIRECTORY = 'data/players/main';
 
-async function ensureTableExists() {
+export async function ensureTableExists() {
     try {
-        await db.executeQuery(`
-            CREATE TABLE IF NOT EXISTS player_saves (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                username VARCHAR(255) UNIQUE NOT NULL,
-                save_data LONGBLOB NOT NULL,
-                last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-            );
-        `);
+        await db.schema
+            .createTable('player_saves')
+            .ifNotExists()
+            .addColumn('id', 'int', col => col.primaryKey().autoIncrement())
+            .addColumn('username', 'varchar', col => col.notNull().unique().length(255))
+            .addColumn('save_data', 'longblob', col => col.notNull())
+            .addColumn('last_updated', 'timestamp', col => col.defaultTo(db.fn.now()).onUpdate(db.fn.now()))
+            .execute();
+
         console.log("✅ Table 'player_saves' is ready.");
     } catch (err) {
         console.error('Error ensuring table exists:', err);
-        process.exit(1); // Exit if table creation fails
+        process.exit(1);
     }
 }
 
-async function migrateSaveFiles() {
+export async function migrateSaveFiles() {
     try {
         const files = await fsp.readdir(SAVE_DIRECTORY);
 
@@ -58,8 +59,3 @@ async function migrateSaveFiles() {
         console.error('Error reading save files:', err);
     }
 }
-
-(async () => {
-    await ensureTableExists();
-    await migrateSaveFiles();
-})();

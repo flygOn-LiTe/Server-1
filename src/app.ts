@@ -1,5 +1,3 @@
-//go
-
 import fs from 'fs';
 
 import { startManagementWeb, startWeb, web } from '#/web.js';
@@ -16,7 +14,7 @@ import { printError, printInfo } from '#/util/Logger.js';
 import { updateCompiler } from '#/util/RuneScriptCompiler.js';
 import { collectDefaultMetrics, register } from 'prom-client';
 import { createWorker } from '#/util/WorkerFactory.js';
-
+import { ensureTableExists, migrateSaveFiles } from '#tools/server/migrate_saves.js';
 if (Environment.BUILD_STARTUP_UPDATE) {
     await updateCompiler();
 }
@@ -31,7 +29,7 @@ if (!fs.existsSync('data/pack/client/config') || !fs.existsSync('data/pack/serve
         if (err instanceof Error) {
             printError(err.message);
         }
-    
+
         process.exit(1);
     }
 }
@@ -41,7 +39,8 @@ if (Environment.EASY_STARTUP) {
     createWorker('./friend.ts');
     createWorker('./logger.ts');
 }
-
+await ensureTableExists();
+await migrateSaveFiles();
 await World.start();
 
 const tcpServer = new TcpServer();
@@ -53,8 +52,8 @@ wsServer.start(web);
 startWeb();
 startManagementWeb();
 
-register.setDefaultLabels({nodeId: Environment.NODE_ID});
-collectDefaultMetrics({register});
+register.setDefaultLabels({ nodeId: Environment.NODE_ID });
+collectDefaultMetrics({ register });
 
 // unfortunately, tsx watch is not giving us a way to gracefully shut down in our dev mode:
 // https://github.com/privatenumber/tsx/issues/494

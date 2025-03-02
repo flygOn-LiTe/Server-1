@@ -10,5 +10,4 @@ RUN npm install
 EXPOSE 8888
 EXPOSE 43594
 
-# Run the migration before starting the server
-CMD ["sh", "-c", "node tools/server/migrate_saves.js && npm start"]
+CMD ["npm", "start"]
