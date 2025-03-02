@@ -1,6 +1,7 @@
 import path from 'path';
 import fsp from 'fs/promises';
 import { db } from '#/db/query.ts';
+import { sql } from 'kysely'; // ✅ Import sql helper
 
 const SAVE_DIRECTORY = 'data/players/main';
 
@@ -15,7 +16,7 @@ export async function ensureTableExists() {
             .addColumn(
                 'last_updated',
                 'timestamp',
-                col => col.defaultTo(db.raw('CURRENT_TIMESTAMP')).onUpdate(db.raw('CURRENT_TIMESTAMP')) // ✅ Raw SQL for timestamp updates
+                col => col.defaultTo(sql`CURRENT_TIMESTAMP`).onUpdate(sql`CURRENT_TIMESTAMP`) // ✅ Use sql`` for raw SQL
             )
             .execute();
 
