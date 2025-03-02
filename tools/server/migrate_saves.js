@@ -9,10 +9,10 @@ export async function ensureTableExists() {
         await db.schema
             .createTable('player_saves')
             .ifNotExists()
-            .addColumn('id', 'int', col => col.primaryKey().autoIncrement())
-            .addColumn('username', 'varchar', col => col.notNull().unique().length(255))
-            .addColumn('save_data', 'longblob', col => col.notNull())
-            .addColumn('last_updated', 'timestamp', col => col.defaultTo(db.fn.now()).onUpdate(db.fn.now()))
+            .addColumn('id', 'integer', col => col.primaryKey().autoIncrement()) // ✅ Use "integer" instead of "int"
+            .addColumn('username', 'varchar(255)', col => col.notNull().unique()) // ✅ Define length explicitly inside varchar()
+            .addColumn('save_data', 'longblob', col => col.notNull()) // ✅ Ensure binary format for save files
+            .addColumn('last_updated', 'timestamp', col => col.defaultTo(db.raw('CURRENT_TIMESTAMP')).onUpdate(db.raw('CURRENT_TIMESTAMP'))) // ✅ Use raw SQL for timestamp defaulting
             .execute();
 
         console.log("✅ Table 'player_saves' is ready.");
@@ -48,7 +48,7 @@ export async function migrateSaveFiles() {
                     })
                     .execute();
 
-                console.log(`✅ Successfully migrated: ${username}.sav`);
+                console.log(`Successfully migrated: ${username}.sav`);
             } catch (err) {
                 console.error(`Failed to migrate: ${username}.sav`, err);
             }
