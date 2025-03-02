@@ -9,10 +9,14 @@ export async function ensureTableExists() {
         await db.schema
             .createTable('player_saves')
             .ifNotExists()
-            .addColumn('id', 'integer', col => col.primaryKey().autoIncrement()) // ✅ Use "integer" instead of "int"
-            .addColumn('username', 'varchar(255)', col => col.notNull().unique()) // ✅ Define length explicitly inside varchar()
-            .addColumn('save_data', 'longblob', col => col.notNull()) // ✅ Ensure binary format for save files
-            .addColumn('last_updated', 'timestamp', col => col.defaultTo(db.raw('CURRENT_TIMESTAMP')).onUpdate(db.raw('CURRENT_TIMESTAMP'))) // ✅ Use raw SQL for timestamp defaulting
+            .addColumn('id', 'integer', col => col.primaryKey().autoIncrement()) // ✅ Correct integer type
+            .addColumn('username', 'varchar(255)', col => col.notNull().unique()) // ✅ Explicit length
+            .addColumn('save_data', 'blob', col => col.notNull()) // ✅ Use "blob" instead of "longblob"
+            .addColumn(
+                'last_updated',
+                'timestamp',
+                col => col.defaultTo(db.raw('CURRENT_TIMESTAMP')).onUpdate(db.raw('CURRENT_TIMESTAMP')) // ✅ Raw SQL for timestamp updates
+            )
             .execute();
 
         console.log("✅ Table 'player_saves' is ready.");
