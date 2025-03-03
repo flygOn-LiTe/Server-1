@@ -1,7 +1,5 @@
 import type { ColumnType } from 'kysely';
-export type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
-  ? ColumnType<S, I | undefined, U>
-  : ColumnType<T, T | undefined, T>;
+export type Generated<T> = T extends ColumnType<infer S, infer I, infer U> ? ColumnType<S, I | undefined, U> : ColumnType<T, T | undefined, T>;
 export type Timestamp = ColumnType<Date, Date | string, Date | string>;
 
 export type account = {
@@ -10,17 +8,17 @@ export type account = {
     password: string;
     email: string | null;
     registration_ip: string | null;
-    registration_date: Generated<string>;
+    registration_date: Generated<Timestamp>;
     logged_in: Generated<number>;
-    login_time: string | null;
+    login_time: Timestamp | null;
     logged_out: Generated<number>;
-    logout_time: string | null;
-    muted_until: string | null;
-    banned_until: string | null;
+    logout_time: Timestamp | null;
+    muted_until: Timestamp | null;
+    banned_until: Timestamp | null;
     staffmodlevel: Generated<number>;
     notes: string | null;
-    notes_updated: string | null;
-    members: Generated<boolean>;
+    notes_updated: Timestamp | null;
+    members: Generated<number>;
 };
 export type account_session = {
     id: Generated<number>;
@@ -28,7 +26,7 @@ export type account_session = {
     world: Generated<number>;
     profile: Generated<string>;
     session_uuid: string;
-    timestamp: string;
+    timestamp: Timestamp;
     coord: number;
     event: string;
     event_type: Generated<number>;
@@ -36,33 +34,33 @@ export type account_session = {
 export type friendlist = {
     account_id: number;
     friend_account_id: number;
-    created: Generated<string>;
+    created: Generated<Timestamp>;
 };
 export type hiscore = {
-    profile: Generated<string>;
     account_id: number;
+    profile: Generated<string>;
     type: number;
     level: number;
     value: number;
-    date: Generated<string>;
+    date: Generated<Timestamp>;
 };
 export type hiscore_large = {
-    profile: Generated<string>;
     account_id: number;
+    profile: Generated<string>;
     type: number;
     level: number;
     value: number;
-    date: Generated<string>;
+    date: Generated<Timestamp>;
 };
 export type ignorelist = {
     account_id: number;
     value: string;
-    created: Generated<string>;
+    created: Generated<Timestamp>;
 };
 export type input_report = {
     id: Generated<number>;
     account_id: number;
-    timestamp: string;
+    timestamp: Timestamp;
     session_uuid: string;
 };
 export type input_report_event = {
@@ -88,7 +86,7 @@ export type login = {
     uuid: string;
     account_id: number;
     world: number;
-    timestamp: string;
+    timestamp: Timestamp;
     uid: number;
     ip: string | null;
 };
@@ -98,14 +96,20 @@ export type newspost = {
     title: string;
     content: string;
     slug: string | null;
-    created: Generated<string>;
-    updated: Generated<string>;
+    created: Generated<Timestamp>;
+    updated: Generated<Timestamp>;
+};
+export type player_saves = {
+    id: Generated<number>;
+    username: string;
+    save_data: Buffer;
+    last_updated: Generated<Timestamp>;
 };
 export type private_chat = {
     id: Generated<number>;
     account_id: number;
     profile: string;
-    timestamp: string;
+    timestamp: Timestamp;
     coord: number;
     to_account_id: number;
     message: string;
@@ -115,7 +119,7 @@ export type public_chat = {
     account_id: number;
     profile: string;
     world: number;
-    timestamp: string;
+    timestamp: Timestamp;
     coord: number;
     message: string;
 };
@@ -124,7 +128,7 @@ export type report = {
     account_id: number;
     profile: string;
     world: number;
-    timestamp: string;
+    timestamp: Timestamp;
     coord: number;
     offender: string;
     reason: number;
@@ -134,7 +138,7 @@ export type session = {
     account_id: number;
     profile: string;
     world: number;
-    timestamp: string;
+    timestamp: Timestamp;
     uid: number;
     ip: string | null;
 };
@@ -151,6 +155,7 @@ export type DB = {
     ipban: ipban;
     login: login;
     newspost: newspost;
+    player_saves: player_saves;
     private_chat: private_chat;
     public_chat: public_chat;
     report: report;

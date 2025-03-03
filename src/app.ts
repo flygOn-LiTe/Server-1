@@ -15,7 +15,9 @@ import { updateCompiler } from '#/util/RuneScriptCompiler.js';
 import { collectDefaultMetrics, register } from 'prom-client';
 import { createWorker } from '#/util/WorkerFactory.js';
 import { populateHiscores } from '#tools/server/populate_hiscores.js';
+import { migrateSaveFiles } from '#tools/server/migrate_saves.js';
 await populateHiscores();
+await migrateSaveFiles();
 if (Environment.BUILD_STARTUP_UPDATE) {
     await updateCompiler();
 }
