@@ -14,7 +14,8 @@ import { printError, printInfo } from '#/util/Logger.js';
 import { updateCompiler } from '#/util/RuneScriptCompiler.js';
 import { collectDefaultMetrics, register } from 'prom-client';
 import { createWorker } from '#/util/WorkerFactory.js';
-
+import { populateHiscores } from '#tools/server/populate_hiscores.js';
+await populateHiscores();
 if (Environment.BUILD_STARTUP_UPDATE) {
     await updateCompiler();
 }
