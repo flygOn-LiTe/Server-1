@@ -14,7 +14,6 @@ import { printError, printInfo } from '#/util/Logger.js';
 import { updateCompiler } from '#/util/RuneScriptCompiler.js';
 import { collectDefaultMetrics, register } from 'prom-client';
 import { createWorker } from '#/util/WorkerFactory.js';
-import { ensureTableExists, migrateSaveFiles } from '#tools/server/migrate_saves.js';
 
 if (Environment.BUILD_STARTUP_UPDATE) {
     await updateCompiler();
@@ -40,8 +39,7 @@ if (Environment.EASY_STARTUP) {
     createWorker('./friend.ts');
     createWorker('./logger.ts');
 }
-await ensureTableExists();
-await migrateSaveFiles();
+
 await World.start();
 
 const tcpServer = new TcpServer();

@@ -207,3 +207,10 @@ model input_report_event_raw {
 
     @@id([input_report_id, seq])
 }
+
+model player_saves {
+    id           Int      @id @default(autoincrement())
+    username     String   @unique
+    save_data    Bytes
+    last_updated DateTime @default(now()) @updatedAt
+}
