@@ -268,8 +268,7 @@ export default class LoginServer {
                                         response: 4,
                                         account_id: account.id,
                                         staffmodlevel: account.staffmodlevel,
-                                        muted_until: account.muted_until,
-                                        messageCount
+                                        muted_until: account.muted_until
                                     })
                                 );
                             }
@@ -289,8 +288,7 @@ export default class LoginServer {
                                     staffmodlevel: account.staffmodlevel,
                                     save: save.toString('base64'),
                                     muted_until: account.muted_until,
-                                    members: account.members,
-                                    messageCount
+                                    members: account.members
                                 })
                             );
                         }
