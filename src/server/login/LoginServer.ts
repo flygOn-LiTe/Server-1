@@ -10,6 +10,7 @@ import Environment from '#/util/Environment.js';
 import { printInfo } from '#/util/Logger.js';
 import { PlayerLoading } from '#/engine/entity/PlayerLoading.js';
 import Packet from '#/io/Packet.js';
+import { getUnreadMessageCount } from '#/util/Messages.js';
 
 export default class LoginServer {
     private server: WebSocketServer;
@@ -183,6 +184,8 @@ export default class LoginServer {
                                 })
                                 .execute();
 
+                            const messageCount = await getUnreadMessageCount(account.id);
+
                             if (!hasSave) {
                                 const save = await fsp.readFile(`data/players/${profile}/${username}.sav`);
                                 if (!save || !PlayerLoading.verify(new Packet(save))) {
@@ -198,7 +201,8 @@ export default class LoginServer {
                                         staffmodlevel: account.staffmodlevel,
                                         muted_until: account.muted_until,
                                         save: save.toString('base64'),
-                                        members: account.members
+                                        members: account.members,
+                                        messageCount
                                     })
                                 );
                             } else {
@@ -209,7 +213,8 @@ export default class LoginServer {
                                         account_id: account.id,
                                         staffmodlevel: account.staffmodlevel,
                                         muted_until: account.muted_until,
-                                        members: account.members
+                                        members: account.members,
+                                        messageCount
                                     })
                                 );
                             }
@@ -247,6 +252,8 @@ export default class LoginServer {
                             })
                             .execute();
 
+                        const messageCount = await getUnreadMessageCount(account.id);
+
                         if (!fs.existsSync(`data/players/${profile}/${username}.sav`)) {
                             // not an error - never logged in before
                             // ^ Only not an error if the user has never logged in before:
@@ -261,7 +268,8 @@ export default class LoginServer {
                                         response: 4,
                                         account_id: account.id,
                                         staffmodlevel: account.staffmodlevel,
-                                        muted_until: account.muted_until
+                                        muted_until: account.muted_until,
+                                        messageCount
                                     })
                                 );
                             }
@@ -281,7 +289,8 @@ export default class LoginServer {
                                     staffmodlevel: account.staffmodlevel,
                                     save: save.toString('base64'),
                                     muted_until: account.muted_until,
-                                    members: account.members
+                                    members: account.members,
+                                    messageCount
                                 })
                             );
                         }

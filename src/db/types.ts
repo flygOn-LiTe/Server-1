@@ -1,5 +1,7 @@
 import type { ColumnType } from 'kysely';
-export type Generated<T> = T extends ColumnType<infer S, infer I, infer U> ? ColumnType<S, I | undefined, U> : ColumnType<T, T | undefined, T>;
+export type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
+  ? ColumnType<S, I | undefined, U>
+  : ColumnType<T, T | undefined, T>;
 export type Timestamp = ColumnType<Date, Date | string, Date | string>;
 
 export type account = {
@@ -8,16 +10,16 @@ export type account = {
     password: string;
     email: string | null;
     registration_ip: string | null;
-    registration_date: Generated<Timestamp>;
+    registration_date: Generated<string>;
     logged_in: Generated<number>;
-    login_time: Timestamp | null;
+    login_time: string | null;
     logged_out: Generated<number>;
-    logout_time: Timestamp | null;
-    muted_until: Timestamp | null;
-    banned_until: Timestamp | null;
+    logout_time: string | null;
+    muted_until: string | null;
+    banned_until: string | null;
     staffmodlevel: Generated<number>;
     notes: string | null;
-    notes_updated: Timestamp | null;
+    notes_updated: string | null;
     members: Generated<number>;
 };
 export type account_session = {
@@ -26,7 +28,7 @@ export type account_session = {
     world: Generated<number>;
     profile: Generated<string>;
     session_uuid: string;
-    timestamp: Timestamp;
+    timestamp: string;
     coord: number;
     event: string;
     event_type: Generated<number>;
@@ -34,33 +36,33 @@ export type account_session = {
 export type friendlist = {
     account_id: number;
     friend_account_id: number;
-    created: Generated<Timestamp>;
+    created: Generated<string>;
 };
 export type hiscore = {
-    account_id: number;
     profile: Generated<string>;
+    account_id: number;
     type: number;
     level: number;
     value: number;
-    date: Generated<Timestamp>;
+    date: Generated<string>;
 };
 export type hiscore_large = {
-    account_id: number;
     profile: Generated<string>;
+    account_id: number;
     type: number;
     level: number;
     value: number;
-    date: Generated<Timestamp>;
+    date: Generated<string>;
 };
 export type ignorelist = {
     account_id: number;
     value: string;
-    created: Generated<Timestamp>;
+    created: Generated<string>;
 };
 export type input_report = {
     id: Generated<number>;
     account_id: number;
-    timestamp: Timestamp;
+    timestamp: string;
     session_uuid: string;
 };
 export type input_report_event = {
@@ -86,9 +88,32 @@ export type login = {
     uuid: string;
     account_id: number;
     world: number;
-    timestamp: Timestamp;
+    timestamp: string;
     uid: number;
     ip: string | null;
+};
+export type message = {
+    id: Generated<number>;
+    thread_id: number;
+    sender_id: number;
+    sender_ip: string;
+    sender: Generated<string>;
+    content: string;
+    created: Generated<string>;
+};
+export type message_thread = {
+    id: Generated<number>;
+    to_account_id: number | null;
+    from_account_id: number;
+    last_message_from: number;
+    subject: string;
+    created: Generated<string>;
+    updated: Generated<string>;
+    read: string | null;
+    closed: string | null;
+    to_deleted: string | null;
+    from_deleted: string | null;
+    messages: Generated<number>;
 };
 export type newspost = {
     id: Generated<number>;
@@ -96,20 +121,14 @@ export type newspost = {
     title: string;
     content: string;
     slug: string | null;
-    created: Generated<Timestamp>;
-    updated: Generated<Timestamp>;
-};
-export type player_saves = {
-    id: Generated<number>;
-    username: string;
-    save_data: Buffer;
-    last_updated: Generated<Timestamp>;
+    created: Generated<string>;
+    updated: Generated<string>;
 };
 export type private_chat = {
     id: Generated<number>;
     account_id: number;
     profile: string;
-    timestamp: Timestamp;
+    timestamp: string;
     coord: number;
     to_account_id: number;
     message: string;
@@ -119,7 +138,7 @@ export type public_chat = {
     account_id: number;
     profile: string;
     world: number;
-    timestamp: Timestamp;
+    timestamp: string;
     coord: number;
     message: string;
 };
@@ -128,7 +147,7 @@ export type report = {
     account_id: number;
     profile: string;
     world: number;
-    timestamp: Timestamp;
+    timestamp: string;
     coord: number;
     offender: string;
     reason: number;
@@ -138,7 +157,7 @@ export type session = {
     account_id: number;
     profile: string;
     world: number;
-    timestamp: Timestamp;
+    timestamp: string;
     uid: number;
     ip: string | null;
 };
@@ -154,8 +173,9 @@ export type DB = {
     input_report_event_raw: input_report_event_raw;
     ipban: ipban;
     login: login;
+    message: message;
+    message_thread: message_thread;
     newspost: newspost;
-    player_saves: player_saves;
     private_chat: private_chat;
     public_chat: public_chat;
     report: report;

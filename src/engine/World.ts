@@ -72,6 +72,8 @@ import Environment from '#/util/Environment.js';
 import { printDebug, printError, printInfo } from '#/util/Logger.js';
 import { createWorker } from '#/util/WorkerFactory.js';
 import HuntModeType from '#/engine/entity/hunt/HuntModeType.js';
+import HuntNobodyNear from '#/engine/entity/hunt/HuntNobodyNear.js';
+
 import {
     trackCycleBandwidthInBytes,
     trackCycleBandwidthOutBytes,
@@ -635,24 +637,29 @@ class World {
         // - npc ai_spawn scripts
         // - npc hunt players if not busy
         for (const npc of this.npcs) {
-            if (!npc.checkLifeCycle(tick)) {
-                continue;
-            }
-            // check if spawned last tick
-            if (npc.lastLifecycleTick === tick - 1 && npc.lifecycle !== EntityLifeCycle.FOREVER) {
-                const type = NpcType.get(npc.type);
-                const script = ScriptProvider.getByTrigger(ServerTriggerType.AI_SPAWN, type.id, type.category);
-                if (script) {
-                    npc.executeScript(ScriptRunner.init(script, npc));
+            // Check if npc is alive
+            if (npc.isActive) {
+                // Hunts will process even if the npc is delayed during this portion
+                if (npc.huntMode !== -1 && npc.observerCount > 0) {
+                    const hunt = HuntType.get(npc.huntMode);
+
+                    if (hunt && hunt.type === HuntModeType.PLAYER) {
+                        npc.huntAll();
+                    }
                 }
             }
-            if (npc.delayed) {
-                continue;
-            }
-            if (npc.huntMode !== -1) {
-                const hunt = HuntType.get(npc.huntMode);
-                if (hunt && hunt.type === HuntModeType.PLAYER) {
-                    npc.huntAll();
+
+            // This is slightly redundant with isActive, but also checks if npc is delayed
+            // Spawn triggers shouldn't run if delayed
+            if (npc.isValid()) {
+                // Check if spawn trigger is pending
+                if (npc.spawnTriggerPending) {
+                    const type = NpcType.get(npc.type);
+                    const script = ScriptProvider.getByTrigger(ServerTriggerType.AI_SPAWN, type.id, type.category);
+                    if (script) {
+                        npc.executeScript(ScriptRunner.init(script, npc));
+                    }
+                    npc.spawnTriggerPending = false;
                 }
             }
         }
@@ -741,10 +748,6 @@ class World {
         const start: number = Date.now();
         for (const npc of this.npcs) {
             try {
-                // timers continue to tick when npc is despawned
-                if (npc.timerInterval !== 0) {
-                    npc.timerClock++;
-                }
                 if (npc.checkLifeCycle(this.currentTick)) {
                     if (npc.delayed && this.currentTick >= npc.delayedUntil) npc.delayed = false;
 
@@ -778,22 +781,31 @@ class World {
                     }
                 }
 
-                if (npc.delayed) {
+                // Checks if Npc is alive and not delayed
+                if (!npc.isValid()) {
                     continue;
                 }
 
-                if (!npc.checkLifeCycle(this.currentTick)) {
-                    // if the npc just despawned then don't do anything else.
-                    continue;
-                }
-
-                // - hunt npc/obj/loc
+                // Process some hunt logic
                 if (npc.huntMode !== -1) {
                     const hunt = HuntType.get(npc.huntMode);
-                    if (hunt && hunt.type !== HuntModeType.PLAYER) {
-                        npc.huntAll();
+
+                    if (hunt.nobodyNear !== HuntNobodyNear.PAUSEHUNT || npc.observerCount > 0 || hunt.type === HuntModeType.PLAYER) {
+                        // - hunt npc/obj/loc
+                        if (hunt && hunt.type !== HuntModeType.PLAYER) {
+                            npc.huntAll();
+                        }
+
+                        // Increment huntclock
+                        npc.huntClock++;
+                    }
+
+                    // Consume target
+                    if (npc.huntTarget) {
+                        npc.consumeHuntTarget();
                     }
                 }
+
                 // - stat regen
                 npc.processRegen();
                 // - timer
@@ -1012,7 +1024,8 @@ class World {
             try {
                 // if it throws then there was no available pid. otherwise guaranteed to not be -1.
                 pid = this.getNextPid(isClientConnected(player) ? player.client : null);
-            } catch (_) {  // eslint-disable-line @typescript-eslint/no-unused-vars
+            } catch (_) {
+                // eslint-disable-line @typescript-eslint/no-unused-vars
                 // world full
                 if (isClientConnected(player)) {
                     player.addSessionLog(LoggerEventType.ENGINE, 'Tried to log in - world full');
@@ -1080,7 +1093,6 @@ class World {
     private processInfo(): void {
         // TODO: benchmark this?
         for (const player of this.players) {
-            player.convertMovementDir();
             player.reorient();
 
             const grid = this.playerGrid;
@@ -1095,7 +1107,6 @@ class World {
         }
 
         for (const npc of this.npcs) {
-            npc.convertMovementDir();
             npc.reorient();
             this.npcRenderer.computeInfo(npc);
         }
@@ -1563,6 +1574,11 @@ class World {
             player.client.close();
         }
 
+        // Decrement observers of rendered npcs
+        for (const npc of player.buildArea.npcs) {
+            npc.observerCount = Math.max(npc.observerCount - 1, 0);
+        }
+
         this.playerRenderer.removePermanent(player.pid);
         this.gameMap.getZone(player.x, player.z, player.level).leave(player);
         this.players.remove(player.pid);
@@ -1837,7 +1853,7 @@ class World {
                 return;
             }
 
-            const { account_id, username, lowMemory, reconnecting, staffmodlevel, muted_until, members } = msg;
+            const { account_id, username, lowMemory, reconnecting, staffmodlevel, muted_until, members, messageCount } = msg;
             const save = msg.save ?? new Uint8Array();
 
             // if (reconnecting && !this.getPlayerByUsername(username)) {
@@ -1862,6 +1878,7 @@ class World {
                 player.lowMemory = lowMemory;
                 player.muted_until = muted_until ? new Date(muted_until) : null;
                 player.members = members;
+                player.messageCount = messageCount ?? 0;
 
                 if (this.logoutRequests.has(username)) {
                     // already logged in (on another world)
@@ -1872,7 +1889,7 @@ class World {
 
                 if (!Environment.NODE_MEMBERS && !this.gameMap.isFreeToPlay(player.x, player.z)) {
                     // in a p2p zone when logging into f2p
-                    if(player.members) {
+                    if (player.members) {
                         client.send(Uint8Array.from([17]));
                         client.close();
                         this.loginThread.postMessage({

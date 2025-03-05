@@ -83,6 +83,7 @@ import ZoneMap from '#/engine/zone/ZoneMap.js';
 import UpdateStat from '#/network/server/model/UpdateStat.js';
 import UpdateZoneFullFollows from '#/network/server/model/UpdateZoneFullFollows.js';
 import RebuildNormal from '#/network/server/model/RebuildNormal.js';
+import UpdateRunEnergy from '#/network/server/model/UpdateRunEnergy.js';
 const levelExperience = new Int32Array(99);
 
 let acc = 0;
@@ -117,21 +118,83 @@ export default class Player extends PathingEntity {
     ];
 
     static readonly MALE_FEMALE_MAP = new Map<number, number>([
-        [0, 45], [1, 47], [2, 48], [3, 49], [4, 50], [5, 51], [6, 52], [7, 53], [8, 54], [9, 55],
-        [18, 56], [19, 56], [20, 56], [21, 56], [22, 56], [23, 56], [24, 56], [25, 56],
-        [26, 61], [27, 63], [28, 62], [29, 65], [30, 64], [31, 63], [32, 66],
-        [33, 67], [34, 68], [35, 69],
-        [36, 70], [37, 71], [38, 72], [39, 76], [40, 75], [41, 78],
-        [42, 79], [43, 80], [44, 81]
+        [0, 45],
+        [1, 47],
+        [2, 48],
+        [3, 49],
+        [4, 50],
+        [5, 51],
+        [6, 52],
+        [7, 53],
+        [8, 54],
+        [9, 55],
+        [18, 56],
+        [19, 56],
+        [20, 56],
+        [21, 56],
+        [22, 56],
+        [23, 56],
+        [24, 56],
+        [25, 56],
+        [26, 61],
+        [27, 63],
+        [28, 62],
+        [29, 65],
+        [30, 64],
+        [31, 63],
+        [32, 66],
+        [33, 67],
+        [34, 68],
+        [35, 69],
+        [36, 70],
+        [37, 71],
+        [38, 72],
+        [39, 76],
+        [40, 75],
+        [41, 78],
+        [42, 79],
+        [43, 80],
+        [44, 81]
     ]);
 
     static readonly FEMALE_MALE_MAP = new Map<number, number>([
-        [45, 0], [46, 0], [47, 1], [48, 2], [49, 3], [50, 4], [51, 5], [52, 6], [53, 7], [54, 8], [55, 9],
-        [56, 18], [57, 18], [58, 18], [59, 18], [60, 18],
-        [61, 26], [62, 27], [63, 28], [64, 29], [65, 29], [66, 32],
-        [67, 33], [68, 34], [69, 35],
-        [70, 36], [71, 37], [72, 38], [73, 36], [74, 36], [75, 40], [76, 39], [77, 36], [78, 41],
-        [79, 42], [80, 43], [81, 44]
+        [45, 0],
+        [46, 0],
+        [47, 1],
+        [48, 2],
+        [49, 3],
+        [50, 4],
+        [51, 5],
+        [52, 6],
+        [53, 7],
+        [54, 8],
+        [55, 9],
+        [56, 18],
+        [57, 18],
+        [58, 18],
+        [59, 18],
+        [60, 18],
+        [61, 26],
+        [62, 27],
+        [63, 28],
+        [64, 29],
+        [65, 29],
+        [66, 32],
+        [67, 33],
+        [68, 34],
+        [69, 35],
+        [70, 36],
+        [71, 37],
+        [72, 38],
+        [73, 36],
+        [74, 36],
+        [75, 40],
+        [76, 39],
+        [77, 36],
+        [78, 41],
+        [79, 42],
+        [80, 43],
+        [81, 44]
     ]);
 
     save() {
@@ -340,6 +403,7 @@ export default class Player extends PathingEntity {
 
     muted_until: Date | null = null;
     members: boolean = true;
+    messageCount: number = 0;
 
     socialProtect: boolean = false; // social packet spam protection
     reportAbuseProtect: boolean = false; // social packet spam protection
@@ -406,12 +470,21 @@ export default class Player extends PathingEntity {
     // ----
 
     onLogin() {
-        // normalize client between logins
+        // - rebuild_normal
+        // - chat_filter_settings
+        // - varp_reset
+        // - varps
+        // - invs
+        // - interfaces
+        // - stats
+        // - runweight
+        // - runenergy
+        // - reset anims
+        // - social
         this.rebuildNormal();
+        this.write(new ChatFilterSettings(this.publicChat, this.privateChat, this.tradeDuel));
         this.write(new IfClose());
         this.write(new UpdateUid192(this.pid));
-        this.unsetMapFlag();
-        this.write(new ResetAnims());
         this.write(new ResetClientVarCache());
         for (let varp = 0; varp < this.vars.length; varp++) {
             const type = VarPlayerType.get(varp);
@@ -420,7 +493,7 @@ export default class Player extends PathingEntity {
                 this.writeVarp(varp, value);
             }
         }
-        this.write(new ChatFilterSettings(this.publicChat, this.privateChat, this.tradeDuel));
+        this.write(new ResetAnims());
 
         const loginTrigger = ScriptProvider.getByTriggerSpecific(ServerTriggerType.LOGIN, -1, -1);
         if (loginTrigger) {
@@ -433,6 +506,23 @@ export default class Player extends PathingEntity {
     }
 
     onReconnect() {
+        // - varp_reset
+        // - varps
+        // - rebuild_normal
+        // - invs
+        // - stats
+        // - runweight
+        // - runenergy
+        // - reset_anims
+        // - socials
+        this.write(new ResetClientVarCache());
+        for (let varp = 0; varp < this.vars.length; varp++) {
+            const type = VarPlayerType.get(varp);
+            const value = this.vars[varp];
+            if (type.transmit) {
+                this.writeVarp(varp, value);
+            }
+        }
         // force resyncing
         this.scene = SceneState.NONE;
         // reload entity info (overkill? does the client have some logic around this?)
@@ -445,12 +535,13 @@ export default class Player extends PathingEntity {
             const ticksBeforeShutdown = World.shutdownTicksRemaining;
             this.write(new UpdateRebootTimer(ticksBeforeShutdown));
         }
-        this.write(new ResetAnims());
+        this.closeModal();
+        this.refreshInvs();
         for (let i = 0; i < this.stats.length; i++) {
             this.write(new UpdateStat(i, this.stats[i], this.levels[i]));
         }
-        // resync invs
-        this.refreshInvs();
+        this.write(new UpdateRunEnergy(this.runenergy));
+        this.write(new ResetAnims());
         this.moveSpeed = MoveSpeed.INSTANT;
         this.tele = true;
         this.jump = true;
@@ -581,7 +672,7 @@ export default class Player extends PathingEntity {
             const recovered = ((this.baseLevels[PlayerStat.AGILITY] / 9) | 0) + 8;
             this.runenergy = Math.min(this.runenergy + recovered, 10000);
         } else {
-            const weightKg = Math.floor(this.runweight / 1000);
+            const weightKg = this.runweight / 1000;
             const clampWeight = Math.min(Math.max(weightKg, 0), 64);
             const loss = (67 + (67 * clampWeight) / 64) | 0;
             this.runenergy = Math.max(this.runenergy - loss, 0);
@@ -952,7 +1043,7 @@ export default class Player extends PathingEntity {
         this.clearWaypoints();
     }
 
-    protected inOperableDistance(target: Entity): boolean {
+    inOperableDistance(target: Entity): boolean {
         if (target.level !== this.level) {
             return false;
         }
@@ -2037,11 +2128,11 @@ export default class Player extends PathingEntity {
         this.write(new HintArrow(-1, 0, 0, 0, 0, 0));
     }
 
-    lastLoginInfo(lastLoginIp: number, daysSinceLogin: number, daysSinceRecoveryChange: number, unreadMessageCount: number) {
+    lastLoginInfo(lastLoginIp: number, daysSinceLogin: number, daysSinceRecoveryChange: number) {
         // daysSinceRecoveryChange
         // - 201 shows welcome_screen.if
         // - any other value shows welcome_screen_warning
-        this.write(new LastLoginInfo(lastLoginIp, daysSinceLogin, daysSinceRecoveryChange, unreadMessageCount));
+        this.write(new LastLoginInfo(lastLoginIp, daysSinceLogin, daysSinceRecoveryChange, this.messageCount));
     }
 
     logout(): void {
