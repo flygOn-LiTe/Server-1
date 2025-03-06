@@ -19,6 +19,8 @@ data/src/pack/varn.pack
 data/src/pack/vars.pack
 
 data/players/
+data/players/*.sav
+/data/players/main
 data/sessions/
 data/symbols/
 
