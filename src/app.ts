@@ -1,6 +1,6 @@
 import fs from 'fs';
 
-
+import { CronJob } from 'cron';
 import { collectDefaultMetrics, register } from 'prom-client';
 
 import { packClient, packServer } from '#/cache/PackAll.js';
@@ -12,6 +12,7 @@ import { printError, printInfo } from '#/util/Logger.js';
 import { updateCompiler } from '#/util/RuneScriptCompiler.js';
 import { createWorker } from '#/util/WorkerFactory.js';
 import { startManagementWeb, startWeb, web } from '#/web.js';
+import { populateHiscores } from '#tools/server/populate_hiscores.js';
 
 if (Environment.BUILD_STARTUP_UPDATE) {
     await updateCompiler();
@@ -51,6 +52,26 @@ startManagementWeb();
 
 register.setDefaultLabels({ nodeId: Environment.NODE_ID });
 collectDefaultMetrics({ register });
+
+const SERVICE_NAME = process.env.RAILWAY_SERVICE_NAME || 'Unknown';
+
+if (SERVICE_NAME === 'Server-1') {
+    console.log(`🚀 Hiscores cron job is running on ${SERVICE_NAME}`);
+
+    const job = new CronJob(
+        '*/5 * * * *', // Runs every 5 minutes
+        async function () {
+            await populateHiscores();
+        },
+        null, // onComplete callback (optional)
+        true, // Start immediately
+        'America/Los_Angeles' // Timezone
+    );
+
+    console.log(`⏳ Hiscores cron job scheduled to run every 5 minutes.${job} on ${SERVICE_NAME}`);
+} else {
+    console.log(`⏳ Skipping hiscores cron job on ${SERVICE_NAME}`);
+}
 
 // unfortunately, tsx watch is not giving us a way to gracefully shut down in our dev mode:
 // https://github.com/privatenumber/tsx/issues/494
