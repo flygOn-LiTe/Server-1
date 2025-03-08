@@ -1,16 +1,17 @@
 import fs from 'fs';
 import fsp from 'fs/promises';
-import { WebSocketServer } from 'ws';
 
 import bcrypt from 'bcrypt';
+import { WebSocketServer } from 'ws';
+
 
 import { db, toDbDate } from '#/db/query.js';
-
-import Environment from '#/util/Environment.js';
-import { printInfo } from '#/util/Logger.js';
 import { PlayerLoading } from '#/engine/entity/PlayerLoading.js';
 import Packet from '#/io/Packet.js';
+import Environment from '#/util/Environment.js';
+import { printInfo } from '#/util/Logger.js';
 import { getUnreadMessageCount } from '#/util/Messages.js';
+import { startManagementWeb } from '#/web.js';
 
 export default class LoginServer {
     private server: WebSocketServer;
@@ -44,6 +45,10 @@ export default class LoginServer {
     }
 
     constructor() {
+        if (Environment.LOGIN_SERVER && !Environment.EASY_STARTUP) {
+            startManagementWeb();
+        }
+
         this.server = new WebSocketServer({ port: Environment.LOGIN_PORT, host: '0.0.0.0' }, () => {
             printInfo(`Login server listening on port ${Environment.LOGIN_PORT}`);
         });
@@ -268,7 +273,8 @@ export default class LoginServer {
                                         response: 4,
                                         account_id: account.id,
                                         staffmodlevel: account.staffmodlevel,
-                                        muted_until: account.muted_until
+                                        muted_until: account.muted_until,
+                                        messageCount
                                     })
                                 );
                             }
@@ -288,7 +294,8 @@ export default class LoginServer {
                                     staffmodlevel: account.staffmodlevel,
                                     save: save.toString('base64'),
                                     muted_until: account.muted_until,
-                                    members: account.members
+                                    members: account.members,
+                                    messageCount
                                 })
                             );
                         }
