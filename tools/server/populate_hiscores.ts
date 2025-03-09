@@ -125,13 +125,3 @@ export async function updateAllHiscores() {
         await updateHiscores(profile);
     }
 }
-
-// If running this file directly, update all hiscores.
-if (require.main === module) {
-    updateAllHiscores()
-        .then(() => process.exit(0))
-        .catch(err => {
-            console.error('Error updating all hiscores:', err);
-            process.exit(1);
-        });
-}
