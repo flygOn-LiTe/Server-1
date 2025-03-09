@@ -53,6 +53,7 @@ export async function populateHiscores() {
                 let totalLevel = 0;
                 for (let i = 0; i < player.stats.length; i++) {
                     if (!PlayerStatEnabled[i]) continue;
+
                     totalXp += player.stats[i];
                     totalLevel += player.baseLevels[i];
                 }
@@ -64,8 +65,7 @@ export async function populateHiscores() {
                         .updateTable('hiscore_large')
                         .set({
                             level: totalLevel,
-                            value: totalXp,
-                            date: new Date().toISOString() // update date field as ISO string
+                            value: totalXp
                         })
                         .where('account_id', '=', account.id)
                         .where('type', '=', 0)
@@ -79,8 +79,7 @@ export async function populateHiscores() {
                             profile: 'main',
                             type: 0,
                             level: totalLevel,
-                            value: totalXp,
-                            date: new Date().toISOString() // set date field on insert
+                            value: totalXp
                         })
                         .execute();
                 }
@@ -105,8 +104,7 @@ export async function populateHiscores() {
                                 profile: 'main',
                                 type: hiscoreType,
                                 level: player.baseLevels[stat],
-                                value: player.stats[stat],
-                                date: new Date().toISOString() // set date field on insert
+                                value: player.stats[stat]
                             });
                         }
                     }
@@ -117,17 +115,7 @@ export async function populateHiscores() {
                 }
 
                 for (const entry of update) {
-                    await db
-                        .updateTable('hiscore')
-                        .set({
-                            level: entry.level,
-                            value: entry.value,
-                            date: new Date().toISOString() // update date field as ISO string
-                        })
-                        .where('account_id', '=', account.id)
-                        .where('type', '=', entry.type)
-                        .where('profile', '=', 'main')
-                        .execute();
+                    await db.updateTable('hiscore').set(entry).where('account_id', '=', account.id).where('type', '=', entry.type).where('profile', '=', 'main').execute();
                 }
 
                 console.log(`✅ Updated hiscores for: ${username}`);
