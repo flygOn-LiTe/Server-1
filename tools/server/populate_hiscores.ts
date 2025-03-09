@@ -8,136 +8,130 @@ import Packet from '#/io/Packet.js';
 
 InvType.load('data/pack');
 
-const SAVE_DIRECTORY = 'data/players/main';
+export async function updateHiscores(profile: any) {
+    console.time(`hiscores-${profile}`);
+    const players = fs.readdirSync(`data/players/${profile}`);
+    for (const file of players) {
+        try {
+            const username = file.slice(0, -4);
+            const player = PlayerLoading.load(username, Packet.load(`data/players/${profile}/${file}`), null);
+            let account = await db.selectFrom('account').selectAll().where('username', '=', player.username).executeTakeFirst();
 
-export async function populateHiscores() {
-    console.log('🏆 Populating hiscores...');
+            if (!account) {
+                // Create account if missing (testing)
+                await db
+                    .insertInto('account')
+                    .values({
+                        username: player.username,
+                        password: ''
+                    })
+                    .execute();
 
-    try {
-        const files = fs.readdirSync(SAVE_DIRECTORY);
+                account = await db.selectFrom('account').selectAll().where('username', '=', player.username).executeTakeFirstOrThrow();
+            }
 
-        for (const file of files) {
-            if (!file.endsWith('.sav')) continue; // Skip non-save files
+            if (account.staffmodlevel > 1 || (account.banned_until !== null && new Date(account.banned_until) > new Date())) {
+                // Remove banned players from hiscores
+                await db.deleteFrom('hiscore').where('account_id', '=', account.id).execute();
+                await db.deleteFrom('hiscore_large').where('account_id', '=', account.id).execute();
+                continue;
+            }
 
-            const username = file.replace('.sav', '');
-            const filePath = `${SAVE_DIRECTORY}/${file}`;
+            const insert = [];
+            const update = [];
 
-            try {
-                const player = PlayerLoading.load(username, Packet.load(filePath), null);
-                let account = await db.selectFrom('account').selectAll().where('username', '=', player.username).executeTakeFirst();
+            let totalXp = 0;
+            let totalLevel = 0;
+            for (let i = 0; i < player.stats.length; i++) {
+                if (!PlayerStatEnabled[i]) continue;
+                totalXp += player.stats[i];
+                totalLevel += player.baseLevels[i];
+            }
 
-                if (!account) {
-                    // Create account if missing (test case)
-                    await db
-                        .insertInto('account')
-                        .values({
-                            username: player.username,
-                            password: ''
-                        })
-                        .execute();
+            const existing = await db.selectFrom('hiscore_large').select('type').select('value').where('account_id', '=', account.id).where('type', '=', 0).where('profile', '=', profile).executeTakeFirst();
 
-                    account = await db.selectFrom('account').selectAll().where('username', '=', player.username).executeTakeFirstOrThrow();
-                }
+            if (existing && existing.value !== totalXp) {
+                await db
+                    .updateTable('hiscore_large')
+                    .set({
+                        type: 0,
+                        level: totalLevel,
+                        value: totalXp
+                    })
+                    .where('account_id', '=', account.id)
+                    .where('type', '=', 0)
+                    .where('profile', '=', profile)
+                    .execute();
+            } else if (!existing) {
+                await db
+                    .insertInto('hiscore_large')
+                    .values({
+                        account_id: account.id,
+                        profile,
+                        type: 0,
+                        level: totalLevel,
+                        value: totalXp
+                    })
+                    .execute();
+            }
 
-                if (account.staffmodlevel > 1 || (account.banned_until !== null && new Date(account.banned_until) > new Date())) {
-                    // Remove banned players from hiscores
-                    await db.deleteFrom('hiscore').where('account_id', '=', account.id).execute();
-                    await db.deleteFrom('hiscore_large').where('account_id', '=', account.id).execute();
-                    continue;
-                }
+            for (let stat = 0; stat < player.stats.length; stat++) {
+                if (!PlayerStatEnabled[stat]) continue;
 
-                const insert = [];
-                const update = [];
-
-                let totalXp = 0;
-                let totalLevel = 0;
-                for (let i = 0; i < player.stats.length; i++) {
-                    if (!PlayerStatEnabled[i]) continue;
-                    totalXp += player.stats[i];
-                    totalLevel += player.baseLevels[i];
-                }
-
-                // Update or insert total XP
-                const existingXp = await db.selectFrom('hiscore_large').select('value').where('account_id', '=', account.id).where('type', '=', 0).where('profile', '=', 'main').executeTakeFirst();
-                if (existingXp && existingXp.value !== totalXp) {
-                    await db
-                        .updateTable('hiscore_large')
-                        .set({
-                            level: totalLevel,
-                            value: totalXp,
-                            date: new Date().toISOString() // update date field as ISO string
-                        })
-                        .where('account_id', '=', account.id)
-                        .where('type', '=', 0)
-                        .where('profile', '=', 'main')
-                        .execute();
-                } else if (!existingXp) {
-                    await db
-                        .insertInto('hiscore_large')
-                        .values({
+                if (player.baseLevels[stat] >= 15) {
+                    const hiscoreType = stat + 1;
+                    const existingStat = await db.selectFrom('hiscore').select('type').select('value').where('account_id', '=', account.id).where('type', '=', hiscoreType).where('profile', '=', profile).executeTakeFirst();
+                    if (existingStat && existingStat.value !== player.stats[stat]) {
+                        update.push({
+                            type: hiscoreType,
+                            level: player.baseLevels[stat],
+                            value: player.stats[stat]
+                        });
+                    } else if (!existingStat) {
+                        insert.push({
                             account_id: account.id,
-                            profile: 'main',
-                            type: 0,
-                            level: totalLevel,
-                            value: totalXp,
-                            date: new Date().toISOString() // set date field on insert
-                        })
-                        .execute();
-                }
-
-                // Insert or update individual skill hiscores
-                for (let stat = 0; stat < player.stats.length; stat++) {
-                    if (!PlayerStatEnabled[stat]) continue;
-
-                    if (player.baseLevels[stat] >= 15) {
-                        const hiscoreType = stat + 1;
-
-                        const existingStat = await db.selectFrom('hiscore').select('value').where('account_id', '=', account.id).where('type', '=', hiscoreType).where('profile', '=', 'main').executeTakeFirst();
-                        if (existingStat && existingStat.value !== player.stats[stat]) {
-                            update.push({
-                                type: hiscoreType,
-                                level: player.baseLevels[stat],
-                                value: player.stats[stat]
-                            });
-                        } else if (!existingStat) {
-                            insert.push({
-                                account_id: account.id,
-                                profile: 'main',
-                                type: hiscoreType,
-                                level: player.baseLevels[stat],
-                                value: player.stats[stat],
-                                date: new Date().toISOString() // set date field on insert
-                            });
-                        }
+                            profile,
+                            type: hiscoreType,
+                            level: player.baseLevels[stat],
+                            value: player.stats[stat]
+                        });
                     }
                 }
+            }
 
-                if (insert.length > 0) {
-                    await db.insertInto('hiscore').values(insert).execute();
-                }
-
-                for (const entry of update) {
-                    await db
-                        .updateTable('hiscore')
-                        .set({
-                            level: entry.level,
-                            value: entry.value,
-                            date: new Date().toISOString() // update date field as ISO string
-                        })
-                        .where('account_id', '=', account.id)
-                        .where('type', '=', entry.type)
-                        .where('profile', '=', 'main')
-                        .execute();
-                }
-
-                console.log(`✅ Updated hiscores for: ${username}`);
-            } catch (err) {
-                console.error(`❌ Failed to process hiscores for: ${file}`, err);
+            if (insert.length > 0) {
+                await db.insertInto('hiscore').values(insert).execute();
+            }
+            for (let i = 0; i < update.length; i++) {
+                await db.updateTable('hiscore').set(update[i]).where('account_id', '=', account.id).where('type', '=', update[i].type).where('profile', '=', profile).execute();
+            }
+        } catch (err) {
+            if (err instanceof Error) {
+                console.error(file, err.message);
+                console.error(err.stack);
             }
         }
-
-        console.log('🎉 Hiscores population completed!');
-    } catch (err) {
-        console.error('❌ Error reading save files:', err);
     }
+    console.timeEnd(`hiscores-${profile}`);
+}
+
+export async function updateAllHiscores() {
+    // List all directories in data/players (each directory represents a profile)
+    const profiles = fs.readdirSync('data/players');
+    for (const profile of profiles) {
+        const path = `data/players/${profile}`;
+        if (!fs.lstatSync(path).isDirectory()) continue;
+        console.log(`Updating hiscores for profile: ${profile}`);
+        await updateHiscores(profile);
+    }
+}
+
+// If running this file directly, update all hiscores.
+if (require.main === module) {
+    updateAllHiscores()
+        .then(() => process.exit(0))
+        .catch(err => {
+            console.error('Error updating all hiscores:', err);
+            process.exit(1);
+        });
 }
