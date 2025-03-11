@@ -6,6 +6,7 @@ WORKDIR /app
 COPY . /app
 
 RUN npm install
+RUN npm run build  # This rebuilds the server cache
 
 EXPOSE 8888
 EXPOSE 43594
