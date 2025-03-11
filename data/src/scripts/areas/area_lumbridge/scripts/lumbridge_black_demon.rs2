@@ -1,0 +1,19 @@
+[proc,spawn_lumbridge_black_demon]
+// Spawns a black demon near Lumbridge starting area
+// Coordinates are just outside the castle (north)
+npc_add(0_50_50_23_15, black_demon, 0); // Permanent spawn (0 duration)
+npc_setmode(opplayer2); // Set to attack players
+npc_sethunt(10); // Set hunt range to 10 tiles
+
+[ai_queue3,black_demon]
+gosub(npc_death);
+if (npc_findhero = false) {
+    return;
+}
+
+// Use the standard black demon drop table
+gosub(_black_demon:ai_queue3);
+
+// Re-spawn the demon after it dies
+world_delay(200); // Wait 2 minutes (100 ticks = 1 minute)
+~spawn_lumbridge_black_demon;

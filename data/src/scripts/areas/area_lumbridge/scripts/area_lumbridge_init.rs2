@@ -1,0 +1,9 @@
+[login,_]
+// Initialize the black demon spawn on player login
+// This will only happen once per server start
+if (%lumbridge_demon_spawned = 0) {
+    // Set flag to prevent multiple spawns
+    %lumbridge_demon_spawned = 1;
+    // Spawn the black demon
+    ~spawn_lumbridge_black_demon;
+}
