@@ -15,6 +15,7 @@ import { createWorker } from '#/util/WorkerFactory.js';
 import { startManagementWeb, startWeb, web } from '#/web.js';
 import { populateHiscores } from '#tools/server/populate_hiscores.js';
 
+
 if (Environment.BUILD_STARTUP_UPDATE) {
     await updateCompiler();
 }
@@ -42,25 +43,26 @@ if (Environment.EASY_STARTUP) {
 
 await World.start();
 
-
-setTimeout(() => {
-    try {
-        printInfo('Spawning AI players for testing...');
+// Spawn AI players for testing
+if (Environment.NODE_DEBUG) {
+    setTimeout(() => {
+        try {
+            printInfo('Spawning AI players for testing...');
             
-        // Create and spawn two AI players in Lumbridge
-        const ai1 = AIPlayer.spawn('AITester1', 22, 22); // Lumbridge center
-        const ai2 = AIPlayer.spawn('AITester2', 22, 23); // Slightly offset from center
+            // Create and spawn two AI players in Lumbridge
+            const ai1 = AIPlayer.spawn('AITester1', 22, 22); // Lumbridge center
+            const ai2 = AIPlayer.spawn('AITester2', 22, 22); // Slightly offset from center
             
             
-        if (ai1 && ai2) {
-            printInfo('AI players spawned successfully');
-            printInfo(`Total players in world: ${World.getTotalPlayers()}`);
+            if (ai1 && ai2) {
+                printInfo('AI players spawned successfully');
+                printInfo(`Total players in world: ${World.getTotalPlayers()}`);
+            }
+        } catch (err) {
+            printError(`Error spawning AI players: ${err}`);
         }
-    } catch (err) {
-        printError(`Error spawning AI players: ${err}`);
-    }
-}, 5000); // Wait 5 seconds after world start
-
+    }, 5000); // Wait 5 seconds after world start
+}
 
 const tcpServer = new TcpServer();
 tcpServer.start();
