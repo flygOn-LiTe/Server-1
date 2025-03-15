@@ -1,10 +1,15 @@
-import MoveSpeed from '#/engine/entity/MoveSpeed.js';
-import Player from '#/engine/entity/Player.js';
+/* eslint-disable import/order */
+// World needs to be imported before Player to avoid circular dependency issues
 import World from '#/engine/World.js';
+import MoveSpeed from '#/engine/entity/MoveSpeed.js';
 import LoggerEventType from '#/server/logger/LoggerEventType.js';
 import { printInfo, printError } from '#/util/Logger.js';
+// Use type import for Player to avoid initialization issues
+import type { default as PlayerType } from '#/engine/entity/Player.js';
+// Then import the actual class for implementation
+import PlayerClass from '#/engine/entity/Player.js';
 
-export default class AIPlayer extends Player {
+export default class AIPlayer extends PlayerClass {
     /** Whether this AI player is active in the world */
     public active: boolean = false;
   
