@@ -4,33 +4,79 @@ import World from '#/engine/World.js';
 import MoveSpeed from '#/engine/entity/MoveSpeed.js';
 import LoggerEventType from '#/server/logger/LoggerEventType.js';
 import { printInfo, printError } from '#/util/Logger.js';
-// Use type import for Player to avoid initialization issues
-import type { default as PlayerType } from '#/engine/entity/Player.js';
 // Then import the actual class for implementation
 import PlayerClass from '#/engine/entity/Player.js';
 
+/**
+ * AIPlayer class for simulating player behavior
+ */
 export default class AIPlayer extends PlayerClass {
     /** Whether this AI player is active in the world */
     public active: boolean = false;
   
     /** Movement coordinates */
-    public spawnX: number = 22;
-    public spawnZ: number = 22;
-    public targetX: number = 29;
-    public targetZ: number = 19;
+    public spawnX: number = 3222;
+    public spawnZ: number = 3218;
+    public targetX: number = 3230;
+    public targetZ: number = 3360;
 
     /** Movement state tracking */
     public movingToTarget: boolean = true;
+    
+    /** Current waypoint index in the path */
+    public currentWaypointIndex: number = 0;
   
     /** Movement timer */
-    private moveInterval: any = null;
+    private moveInterval: ReturnType<typeof setInterval> | null = null;
   
     /** Heartbeat timer to prevent idle timeout */
-    private heartbeatInterval: any = null;
+    private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
   
     /** Timer for movement intervals */
     public moveTimer: number = 0;
     public readonly MOVE_INTERVAL: number = 3; // Ticks between movements
+
+    /** Predefined waypoints for the journey */
+    public readonly LUMBRIDGE_TO_VARROCK: { x: number, z: number }[] = [
+        { x: 3222, z: 3222 },  
+        { x: 3225, z: 3219 },  
+        { x: 3228, z: 3218 },  
+        { x: 3233, z: 3218 },  
+        { x: 3235, z: 3225 },  
+        { x: 3244, z: 3226 },  
+        { x: 3257, z: 3227},
+        { x: 3260, z: 3230},
+        { x: 3260, z: 3236},
+        { x: 3260, z: 3240},
+        { x: 3256, z: 3247},
+        { x: 3253, z: 3251},
+        { x: 3250, z: 3255},
+        { x: 3250, z: 3259},
+        { x: 3250, z: 3263},
+        { x: 3247, z: 3268},
+        { x: 3246, z: 3272}
+    ];
+
+    public readonly VARROCK_TO_LUMBRIDGE: { x: number, z: number }[] = [
+        { x: 3246, z: 3272 },
+        { x: 3247, z: 3268 },
+        { x: 3250, z: 3263 },
+        { x: 3250, z: 3259 },
+        { x: 3250, z: 3255 },
+        { x: 3253, z: 3251 },
+        { x: 3258, z: 3247 },
+        { x: 3264, z: 3240 },
+        { x: 3264, z: 3236 },
+        { x: 3262, z: 3230 },
+        { x: 3257, z: 3227 },
+        { x: 3244, z: 3226 },
+        { x: 3235, z: 3225 },
+        { x: 3233, z: 3218 },
+        { x: 3228, z: 3218 },
+        { x: 3225, z: 3219 },
+        { x: 3222, z: 3222 }
+    ];
+  
 
     /**
    * Create a new AI player at the specified coordinates
@@ -39,22 +85,26 @@ export default class AIPlayer extends PlayerClass {
    * @param z The z coordinate to spawn the AI at
    * @param level The level to spawn the AI at (default: 0 for ground level)
    */
-    constructor(username: string, x: number, z: number, level: number = 0) {
-        printInfo(`AIPlayer: Creating AI player "${username}" at coordinates (${x}, ${z}, ${level})`);
-    
+    constructor(username: string, x: number = 3222, z: number = 3218, level: number = 0) {
         // Calculate proper username hashes using static methods
         const username37 = AIPlayer.calculateUsername37(username);
         const hash64 = AIPlayer.calculateHash64(username);
-    
-        // Call Player constructor
+        
+        // Call Player constructor with proper parameters
         super(username, username37, hash64);
-    
-        // Override coordinates with our specified values
+        
+        // Set coordinates
         this.x = x;
         this.z = z;
         this.level = level;
-    
-        printInfo(`AIPlayer: Set current coordinates for "${username}" to (${this.x}, ${this.z}, ${this.level})`);
+        
+        // Initialize spawn and target coordinates
+        this.spawnX = x;
+        this.spawnZ = z;
+        this.targetX = 3230; // Varrock Square X
+        this.targetZ = 3360; // Varrock Square Z
+        
+        printInfo(`AIPlayer: Created "${username}" with spawn at (${this.spawnX}, ${this.spawnZ}) and target at (${this.targetX}, ${this.targetZ})`);
     
         // Set basic appearance and properties for the AI character
         this.gender = 0; // Male
@@ -283,24 +333,260 @@ export default class AIPlayer extends PlayerClass {
     }
   
     /**
-   * Start a movement cycle that walks between two points
-   * This movement is visually important but the heartbeat is what actually prevents logout
+   * Process environmental data from the scanning to make intelligent decisions
+   * @param nearbyPlayers Number of players detected nearby
+   * @param nearbyNpcs Number of NPCs detected nearby
+   * @param pathBlocked Whether the path is blocked
    */
+    private processEnvironmentalData(nearbyPlayers: number, nearbyNpcs: number, pathBlocked: boolean): void {
+        try {
+            // Log the data processing
+            printInfo(`AIPlayer: "${this.username}" processing environmental data: ${nearbyPlayers} players, ${nearbyNpcs} NPCs, path blocked: ${pathBlocked}`);
+            
+            // If path is blocked, consider alternative routes
+            if (pathBlocked) {
+                printInfo(`AIPlayer: "${this.username}" detected obstacle, considering route change`);
+                
+                // If we're stuck for too long, try skipping to the next waypoint
+                if (this.stuckCounter > 10) {
+                    printInfo(`AIPlayer: "${this.username}" making intelligent decision to skip current waypoint`);
+                    
+                    // Increment waypoint index to skip the problematic waypoint
+                    this.currentWaypointIndex++;
+                    
+                    const currentPath = this.movingToTarget ? this.LUMBRIDGE_TO_VARROCK : this.VARROCK_TO_LUMBRIDGE;
+                    
+                    // Check if we've completed the path
+                    if (this.currentWaypointIndex >= currentPath.length) {
+                        printInfo(`AIPlayer: "${this.username}" intelligently decided to reverse direction`);
+                        this.movingToTarget = !this.movingToTarget;
+                        this.currentWaypointIndex = 0;
+                    }
+                    
+                    // Reset stuck counter after making a decision
+                    this.stuckCounter = 0;
+                    
+                    // Queue next waypoint
+                    this.moveToNextWaypoint();
+                    
+                    return;
+                }
+            }
+            
+            // React to nearby players - in future this could include following, trading, or chatting
+            if (nearbyPlayers > 0) {
+                printInfo(`AIPlayer: "${this.username}" noticed ${nearbyPlayers} players nearby and is tracking them`);
+                // Future enhancement: Track known players and their movements
+            }
+            
+            // React to nearby NPCs - in future this could include combat or interaction
+            if (nearbyNpcs > 0) {
+                printInfo(`AIPlayer: "${this.username}" noticed ${nearbyNpcs} NPCs nearby and is monitoring them`);
+                // Future enhancement: Identify hostile vs. friendly NPCs
+            }
+            
+        } catch (err) {
+            printError(`AIPlayer: Error processing environmental data for "${this.username}": ${err}`);
+        }
+    }
+
+    /**
+     * Scan the surrounding area for objects, locations, NPCs and other players
+     * This mimics a player's awareness of their environment
+     * @param radius The radius in tiles to scan around the player
+     */
+    public scanSurroundings(radius: number = 5): void {
+        try {
+            // Only scan occasionally to avoid spamming logs
+            if (World.currentTick % 10 !== 0) return;
+            
+            printInfo(`AIPlayer: "${this.username}" scanning surroundings at (${this.x}, ${this.z}, ${this.level})`);
+            
+            // Scan for NPCs within range
+            let npcsFound = 0;
+            World.npcs.forEach(npc => {
+                if (!npc) return;
+                
+                const distanceX = Math.abs(this.x - npc.x);
+                const distanceZ = Math.abs(this.z - npc.z);
+                
+                if (distanceX <= radius && distanceZ <= radius) {
+                    npcsFound++;
+                    const distance = Math.max(distanceX, distanceZ);
+                    printInfo(`AIPlayer: "${this.username}" found NPC: type=${npc.type} at (${npc.x}, ${npc.z}), distance=${distance}`);
+                }
+            });
+            
+            // Scan for other players within range
+            let playersFound = 0;
+            World.players.forEach(player => {
+                if (!player || player.pid === this.pid) return;
+                
+                const distanceX = Math.abs(this.x - player.x);
+                const distanceZ = Math.abs(this.z - player.z);
+                
+                if (distanceX <= radius && distanceZ <= radius) {
+                    playersFound++;
+                    const distance = Math.max(distanceX, distanceZ);
+                    printInfo(`AIPlayer: "${this.username}" found player: "${player.username}" at (${player.x}, ${player.z}), distance=${distance}`);
+                }
+            });
+            
+            // Check for obstacles by analyzing our current waypoint path
+            // This is a simple way to detect obstacles without using complex APIs
+            const pathBlocked = !this.hasWaypoints() && this.stuckCounter > 0;
+            if (pathBlocked) {
+                printInfo(`AIPlayer: "${this.username}" detected obstacle - path is blocked (stuck for ${this.stuckCounter} checks)`);
+            }
+            
+            // Print summary
+            printInfo(`AIPlayer: "${this.username}" found ${npcsFound} NPCs and ${playersFound} players within range. Path blocked: ${pathBlocked}`);
+            
+            // Process the environmental data to make intelligent decisions
+            this.processEnvironmentalData(playersFound, npcsFound, pathBlocked);
+            
+        } catch (err) {
+            printError(`AIPlayer: Error scanning surroundings for "${this.username}": ${err}`);
+        }
+    }
+
+    /**
+     * Helper method to check if a position is walkable
+     * @param x The x coordinate to check
+     * @param z The z coordinate to check
+     * @param _level The level to check (unused but kept for API consistency)
+     * @returns True if the position is walkable, false otherwise
+     */
+    private validateStep(x: number, z: number, _level: number): boolean {
+        try {
+            // Simple collision check - try to find a path to the position
+            // If a path exists, it's walkable
+            const currentPathX = this.waypoints.length > 0 ? this.x : x;
+            const currentPathZ = this.waypoints.length > 0 ? this.z : z;
+            
+            // Check if adjacent
+            const isAdjacent = Math.abs(currentPathX - x) <= 1 && Math.abs(currentPathZ - z) <= 1;
+            
+            if (!isAdjacent) {
+                return false; // Only allow adjacent steps
+            }
+            
+            // Since we can't access validateAndAdvanceStep, we'll use a simplified check
+            // Assume it's walkable if it's adjacent
+            return true;
+        } catch (_) {
+            return false; // If there's an error, assume it's not walkable
+        }
+    }
+
+    /**
+     * Start a movement cycle that walks between two points
+     * This movement is visually important but the heartbeat is what actually prevents logout
+     */
     public startMovementCycle(): void {
-        printInfo(`AIPlayer: Starting movement cycle for "${this.username}"`);
-    
-        // Initialize and start the movement
-        this.moveToNextPoint();
-    
-        // Set up interval to continue moving every 5 seconds
+        printInfo(`AIPlayer: Enhanced movement cycle with environmental awareness for "${this.username}"`);
+        
+        // Clear any existing movement timer
+        if (this.moveInterval) {
+            clearInterval(this.moveInterval);
+            this.moveInterval = null;
+        }
+        
+        // Initialize movement state
+        this.movingToTarget = true;
+        this.currentWaypointIndex = 0;
+        this.stuckCounter = 0;
+        
+        // Keep track of last position to detect when stuck
+        let lastX = this.x;
+        let lastZ = this.z;
+        
+        // First movement - move to first waypoint
+        this.moveToNextWaypoint();
+        
+        // Set up interval for continuous movement
         this.moveInterval = setInterval(() => {
             if (this.active && this.isActive) {
-                // Toggle direction
-                this.movingToTarget = !this.movingToTarget;
-                this.moveToNextPoint();
-        
-                // Update lastResponse during movement as a backup
-                this.lastResponse = World.currentTick;
+                // Scan surroundings for environmental awareness
+                // This will also process the data and influence AI decisions
+                this.scanSurroundings();
+                
+                // Log current path state for debugging
+                this.logPathState();
+                
+                // Check if player has moved since last check
+                const hasMoved = (this.x !== lastX || this.z !== lastZ);
+                
+                if (!hasMoved) {
+                    // Increment stuck counter if we haven't moved
+                    this.stuckCounter++;
+                    printInfo(`AIPlayer: "${this.username}" hasn't moved in ${this.stuckCounter} checks, still at (${this.x}, ${this.z})`);
+                    
+                    // Notice that we don't manually handle being stuck here anymore
+                    // The processEnvironmentalData method will handle that based on 
+                    // our surroundings scan, which is a smarter approach
+                    
+                    // However, if we're severely stuck for an extended period
+                    // we'll still need a failsafe mechanism
+                    if (this.stuckCounter > 20) {
+                        printInfo(`AIPlayer: "${this.username}" is severely stuck, applying emergency measures`);
+                        
+                        // Reset the entire movement state
+                        this.restartMovement();
+                    }
+                } else {
+                    // Reset stuck counter if we moved
+                    if (this.stuckCounter > 0) {
+                        printInfo(`AIPlayer: "${this.username}" unstuck! Moved from (${lastX}, ${lastZ}) to (${this.x}, ${this.z})`);
+                    }
+                    this.stuckCounter = 0;
+                }
+                
+                // Update last position
+                lastX = this.x;
+                lastZ = this.z;
+                
+                // Check if we've reached the current waypoint
+                const currentPath = this.movingToTarget ? this.LUMBRIDGE_TO_VARROCK : this.VARROCK_TO_LUMBRIDGE;
+                
+                if (this.currentWaypointIndex < currentPath.length) {
+                    const currentTarget = currentPath[this.currentWaypointIndex];
+                    
+                    // If we're close enough to the current waypoint
+                    if (Math.abs(this.x - currentTarget.x) <= 3 && Math.abs(this.z - currentTarget.z) <= 3) {
+                        printInfo(`AIPlayer: "${this.username}" reached waypoint ${this.currentWaypointIndex} at (${currentTarget.x}, ${currentTarget.z})`);
+                        
+                        // Increment waypoint index
+                        this.currentWaypointIndex++;
+                        
+                        // If we've reached the end of the path
+                        if (this.currentWaypointIndex >= currentPath.length) {
+                            printInfo(`AIPlayer: "${this.username}" completed path, toggling direction`);
+                            
+                            // Toggle direction and reset index
+                            this.movingToTarget = !this.movingToTarget;
+                            this.currentWaypointIndex = 0;
+                        }
+                        
+                        // Move to the next waypoint
+                        this.moveToNextWaypoint();
+                    } else {
+                        // If we don't have any active waypoints but haven't reached the target,
+                        // something might have interrupted our movement, so try again
+                        if (!this.hasWaypoints()) {
+                            printInfo(`AIPlayer: "${this.username}" movement interrupted, trying again for waypoint ${this.currentWaypointIndex}`);
+                            this.moveToNextWaypoint();
+                        }
+                    }
+                } else {
+                    // Invalid waypoint index, reset
+                    printInfo(`AIPlayer: "${this.username}" has invalid waypoint index, resetting`);
+                    this.currentWaypointIndex = 0;
+                    this.moveToNextWaypoint();
+                }
+                
+                // Keep player active
+                this.forceActiveState();
             } else {
                 // Clean up if player is no longer active
                 if (this.moveInterval) {
@@ -308,71 +594,93 @@ export default class AIPlayer extends PlayerClass {
                     this.moveInterval = null;
                 }
             }
-        }, 5000);
+        }, 3000); // Check every 3 seconds
     }
   
     /**
-   * Move to the next point based on current direction
+   * Move to the next waypoint in the current path
    */
-    private moveToNextPoint(): void {
-        if (!this.active || !this.isActive) {
-            return;
-        }
-    
+    private moveToNextWaypoint(): void {
         try {
-            // Determine which point to move to
-            const nextX = this.movingToTarget ? this.targetX : this.spawnX;
-            const nextZ = this.movingToTarget ? this.targetZ : this.spawnZ;
-      
-            // Clear any existing movement queue
+            const currentPath = this.movingToTarget ? this.LUMBRIDGE_TO_VARROCK : this.VARROCK_TO_LUMBRIDGE;
+            
+            if (this.currentWaypointIndex >= currentPath.length) {
+                printInfo(`AIPlayer: "${this.username}" reached end of path, resetting`);
+                this.movingToTarget = !this.movingToTarget;
+                this.currentWaypointIndex = 0;
+            }
+            
+            const waypoint = currentPath[this.currentWaypointIndex];
+            
+            // Calculate distance to target
+            const distX = Math.abs(this.x - waypoint.x);
+            const distZ = Math.abs(this.z - waypoint.z);
+            const totalDistance = Math.sqrt(distX * distX + distZ * distZ);
+            
+            printInfo(`AIPlayer: "${this.username}" moving to waypoint ${this.currentWaypointIndex}: (${waypoint.x}, ${waypoint.z}), distance: ${totalDistance.toFixed(2)}`);
+            
+            // Clear previous pathfinding waypoints if any
             this.clearWaypoints();
-      
-            // Queue the new waypoint and set walking speed
-            this.queueWaypoint(nextX, nextZ);
-            this.moveSpeed = MoveSpeed.WALK;
-      
-            // Log the movement
-            printInfo(`AIPlayer: "${this.username}" moving to (${nextX}, ${nextZ})`);
-      
-            // Keep the player active by updating lastResponse
-            this.lastResponse = World.currentTick;
-        } catch (err) {
-            printError(`AIPlayer: Error during movement for "${this.username}": ${err}`);
+            
+            // Important: Use the normal pathfinding system instead of creating our own waypoints
+            // This will respect collision detection
+            if (waypoint.x !== this.x || waypoint.z !== this.z) {
+                // Use the built-in pathfinding from the Player class
+                // This will respect walls and other obstacles
+                printInfo(`AIPlayer: "${this.username}" using pathfinding to (${waypoint.x}, ${waypoint.z})`);
+                
+                // Queue the waypoint through normal pathfinding which respects collisions
+                this.queueWaypoint(waypoint.x, waypoint.z);
+                
+                // Set to walking speed for more reliable movement that respects collisions
+                this.moveSpeed = MoveSpeed.WALK;
+            } else {
+                printInfo(`AIPlayer: "${this.username}" already at target waypoint, skipping`);
+            }
+            
+            // Force player to be active to avoid timeout
+            this.forceActiveState();
+        } catch (e) {
+            printError(`AIPlayer: Error in moveToNextWaypoint for "${this.username}": ${e}`);
         }
     }
   
     /**
    * Start a heartbeat to prevent the AI player from timing out
-   * This updates lastResponse frequently to avoid timeout detection
+   * This updates lastResponse frequently to avoid timeout detection and forces movement processing
    */
     private startHeartbeat(): void {
-    // Clear any existing heartbeat
+        // Clear any existing heartbeat
         if (this.heartbeatInterval) {
             clearInterval(this.heartbeatInterval);
         }
-    
+        
         // Force initial state to be active
         this.lastResponse = World.currentTick;
         this.lastConnected = World.currentTick;
         this.requestLogout = false;
         this.requestIdleLogout = false;
         this.loggingOut = false;
-    
+        
         // Set a long timeout prevention
         this.preventLogoutUntil = World.currentTick + 10000; // Very far in the future
-    
-        // Create a new heartbeat interval that runs every second
+        
+        // Create a new heartbeat interval that runs every 200ms
         this.heartbeatInterval = setInterval(() => {
             if (this.active && this.isActive) {
                 // IMPORTANT: Update both connection timestamps
                 this.lastResponse = World.currentTick;
                 this.lastConnected = World.currentTick;
-        
+                
                 // Reset logout flags to prevent automatic logout
                 this.requestLogout = false;
                 this.requestIdleLogout = false;
                 this.loggingOut = false;
-        
+                
+                // IMPORTANT: Force movement processing on each heartbeat
+                // This ensures the player moves even if the game engine doesn't process them
+                this.updateMovement();
+                
                 // Add artificial player activity by mimicking client input
                 try {
                     // This mimics a client that just sent a keepalive packet
@@ -391,14 +699,14 @@ export default class AIPlayer extends PlayerClass {
                     this.heartbeatInterval = null;
                 }
             }
-        }, 500); // Run every 500ms (twice per second) for reliability
-    
+        }, 200); // Run more frequently (5 times per second)
+        
         // Start the extra keepalive on a separate timer
         this.startKeepalive();
     }
   
     /** Direct keepalive timer */
-    private keepaliveInterval: any = null;
+    private keepaliveInterval: ReturnType<typeof setInterval> | null = null;
   
     /**
    * Start a separate keepalive timer that ensures the player state
@@ -526,5 +834,178 @@ export default class AIPlayer extends PlayerClass {
         // Keep the player active
         this.lastResponse = World.currentTick;
         this.lastConnected = World.currentTick;
+    }
+
+    /**
+     * Override updateMovement to add debugging and ensure movement is processed
+     */
+    public updateMovement(): boolean {
+        // Check if we have waypoints
+        if (this.hasWaypoints()) {
+            printInfo(`AIPlayer: "${this.username}" processing movement with waypointIndex ${this.waypointIndex}, at (${this.x},${this.z})`);
+            
+            // Try to get the current waypoint
+            if (this.waypointIndex >= 0 && this.waypointIndex < this.waypoints.length) {
+                const waypointCoord = this.waypoints[this.waypointIndex];
+                const coords = {
+                    level: (waypointCoord >> 28) & 0x3,
+                    x: (waypointCoord >> 14) & 0x3fff,
+                    z: waypointCoord & 0x3fff
+                };
+                printInfo(`AIPlayer: "${this.username}" current waypoint: (${coords.x}, ${coords.z})`);
+            }
+        }
+        
+        // Call the parent implementation
+        const moved = super.updateMovement();
+        
+        // Debug the result
+        if (moved) {
+            printInfo(`AIPlayer: "${this.username}" moved successfully to (${this.x},${this.z})`);
+        } else if (this.hasWaypoints()) {
+            printInfo(`AIPlayer: "${this.username}" did not move despite having waypoints`);
+        }
+        
+        // Force active state to prevent timeout
+        this.forceActiveState();
+        
+        return moved;
+    }
+
+    // Add a stuckCounter property
+    public stuckCounter: number = 0;
+
+    /**
+     * Override the hasWaypoints method to diagnose movement issues
+     */
+    public hasWaypoints(): boolean {
+        const hasWaypoints = super.hasWaypoints();
+        if (!hasWaypoints && this.active && this.isActive) {
+            // Log this for debugging
+            printInfo(`AIPlayer: "${this.username}" has no active waypoints at position (${this.x}, ${this.z})`);
+        }
+        return hasWaypoints;
+    }
+
+    /**
+     * Queue pathfinding towards a target when stuck
+     * Uses the built-in pathfinding system which respects collisions
+     */
+    public forceStepTowards(targetX: number, targetZ: number): void {
+        printInfo(`AIPlayer: "${this.username}" requesting pathfinding from (${this.x}, ${this.z}) towards (${targetX}, ${targetZ})`);
+        
+        // Clear any existing waypoints
+        this.clearWaypoints();
+        
+        // Use normal pathfinding to queue up a proper path to the target
+        // This will respect collision detection
+        this.queueWaypoint(targetX, targetZ);
+        
+        // Set to walking speed for more reliable movement
+        this.moveSpeed = MoveSpeed.WALK;
+        
+        // Update timestamp to prevent timeout
+        this.forceActiveState();
+    }
+
+    /**
+     * Diagnostic method to log the current path state
+     */
+    public logPathState(): void {
+        const currentPath = this.movingToTarget ? this.LUMBRIDGE_TO_VARROCK : this.VARROCK_TO_LUMBRIDGE;
+        const totalWaypoints = currentPath.length;
+        const currentWaypointIndex = this.currentWaypointIndex;
+        
+        if (currentWaypointIndex < currentPath.length) {
+            const targetWaypoint = currentPath[currentWaypointIndex];
+            const distanceX = Math.abs(this.x - targetWaypoint.x);
+            const distanceZ = Math.abs(this.z - targetWaypoint.z);
+            const totalDistance = Math.sqrt(distanceX * distanceX + distanceZ * distanceZ);
+            
+            printInfo(`AIPlayer: "${this.username}" path state:
+                - Current position: (${this.x}, ${this.z})
+                - Target waypoint: ${currentWaypointIndex}/${totalWaypoints-1} at (${targetWaypoint.x}, ${targetWaypoint.z})
+                - Distance to target: ${totalDistance.toFixed(2)} tiles
+                - Stuck counter: ${this.stuckCounter}
+                - Has active waypoints: ${this.hasWaypoints()}
+                - Moving to target: ${this.movingToTarget ? 'Lumbridge→Varrock' : 'Varrock→Lumbridge'}`);
+        } else {
+            printInfo(`AIPlayer: "${this.username}" invalid waypoint index: ${currentWaypointIndex}/${totalWaypoints-1}`);
+        }
+    }
+
+    /**
+     * Handle AI player's death event
+     * Ensures proper reset of movement state after death
+     */
+    public handlePlayerDeath(): void {
+        try {
+            printInfo(`AIPlayer: "${this.username}" died, handling death event`);
+            
+            // Clear all waypoints to stop current movement
+            this.clearWaypoints();
+            
+            // Reset stuck counter
+            this.stuckCounter = 0;
+            
+            // Reset movement state
+            this.currentWaypointIndex = 0;
+            this.movingToTarget = true;
+            
+            // Let the standard player death mechanics proceed
+            // Note: We don't call super.onDeath() as it may not exist in parent class
+            
+            // Keep player active
+            this.forceActiveState();
+            
+            // After respawn completes, restart movement with proper collision detection
+            setTimeout(() => {
+                if (this.active && this.isActive) {
+                    printInfo(`AIPlayer: "${this.username}" respawned, restarting movement with collision detection`);
+                    this.restartMovement();
+                }
+            }, 5000); // Wait 5 seconds after death for respawn to complete
+        } catch (err) {
+            printError(`AIPlayer: Error handling death for "${this.username}": ${err}`);
+        }
+    }
+
+    /**
+     * Restart movement after respawn with clean state
+     */
+    private restartMovement(): void {
+        try {
+            // Clear all existing movement
+            this.clearWaypoints();
+            
+            // Reset movement state
+            this.stuckCounter = 0;
+            this.currentWaypointIndex = 0;
+            this.movingToTarget = true;
+            
+            // Set to walking speed for reliable movement
+            this.moveSpeed = MoveSpeed.WALK;
+            
+            // Begin movement to first waypoint using collision-respecting pathfinding
+            this.moveToNextWaypoint();
+            
+            printInfo(`AIPlayer: "${this.username}" movement restarted with collision detection`);
+        } catch (err) {
+            printError(`AIPlayer: Error restarting movement for "${this.username}": ${err}`);
+        }
+    }
+
+    /**
+     * Override applyDamage to detect death events
+     */
+    public applyDamage(damage: number, type: number): void {
+        // Call parent method to apply the damage
+        super.applyDamage(damage, type);
+        
+        // Check if player died from this damage
+        if (this.levels[3] <= 0) {
+            // Handle death event
+            this.handlePlayerDeath();
+        }
     }
 }
