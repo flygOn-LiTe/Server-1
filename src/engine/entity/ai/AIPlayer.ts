@@ -77,6 +77,11 @@ export default class AIPlayer extends PlayerClass {
         { x: 3222, z: 3222 }
     ];
   
+    // Add a counter for scans
+    private scanCounter: number = 0;
+
+    // Add a debug interval property
+    private debugInterval: ReturnType<typeof setInterval> | null = null;
 
     /**
    * Create a new AI player at the specified coordinates
@@ -333,74 +338,22 @@ export default class AIPlayer extends PlayerClass {
     }
   
     /**
-   * Process environmental data from the scanning to make intelligent decisions
-   * @param nearbyPlayers Number of players detected nearby
-   * @param nearbyNpcs Number of NPCs detected nearby
-   * @param pathBlocked Whether the path is blocked
+   * Scan the surrounding area for objects, locations, NPCs and other players
+   * This mimics a player's awareness of their environment
+   * @param radius The radius in tiles to scan around the player
    */
-    private processEnvironmentalData(nearbyPlayers: number, nearbyNpcs: number, pathBlocked: boolean): void {
-        try {
-            // Log the data processing
-            printInfo(`AIPlayer: "${this.username}" processing environmental data: ${nearbyPlayers} players, ${nearbyNpcs} NPCs, path blocked: ${pathBlocked}`);
-            
-            // If path is blocked, consider alternative routes
-            if (pathBlocked) {
-                printInfo(`AIPlayer: "${this.username}" detected obstacle, considering route change`);
-                
-                // If we're stuck for too long, try skipping to the next waypoint
-                if (this.stuckCounter > 10) {
-                    printInfo(`AIPlayer: "${this.username}" making intelligent decision to skip current waypoint`);
-                    
-                    // Increment waypoint index to skip the problematic waypoint
-                    this.currentWaypointIndex++;
-                    
-                    const currentPath = this.movingToTarget ? this.LUMBRIDGE_TO_VARROCK : this.VARROCK_TO_LUMBRIDGE;
-                    
-                    // Check if we've completed the path
-                    if (this.currentWaypointIndex >= currentPath.length) {
-                        printInfo(`AIPlayer: "${this.username}" intelligently decided to reverse direction`);
-                        this.movingToTarget = !this.movingToTarget;
-                        this.currentWaypointIndex = 0;
-                    }
-                    
-                    // Reset stuck counter after making a decision
-                    this.stuckCounter = 0;
-                    
-                    // Queue next waypoint
-                    this.moveToNextWaypoint();
-                    
-                    return;
-                }
-            }
-            
-            // React to nearby players - in future this could include following, trading, or chatting
-            if (nearbyPlayers > 0) {
-                printInfo(`AIPlayer: "${this.username}" noticed ${nearbyPlayers} players nearby and is tracking them`);
-                // Future enhancement: Track known players and their movements
-            }
-            
-            // React to nearby NPCs - in future this could include combat or interaction
-            if (nearbyNpcs > 0) {
-                printInfo(`AIPlayer: "${this.username}" noticed ${nearbyNpcs} NPCs nearby and is monitoring them`);
-                // Future enhancement: Identify hostile vs. friendly NPCs
-            }
-            
-        } catch (err) {
-            printError(`AIPlayer: Error processing environmental data for "${this.username}": ${err}`);
-        }
-    }
-
-    /**
-     * Scan the surrounding area for objects, locations, NPCs and other players
-     * This mimics a player's awareness of their environment
-     * @param radius The radius in tiles to scan around the player
-     */
     public scanSurroundings(radius: number = 5): void {
         try {
-            // Only scan occasionally to avoid spamming logs
-            if (World.currentTick % 10 !== 0) return;
+            // Log every time this method is called to debug
+            printInfo(`AIPlayer: "${this.username}" scan method called, scan #${this.scanCounter}`);
             
-            printInfo(`AIPlayer: "${this.username}" scanning surroundings at (${this.x}, ${this.z}, ${this.level})`);
+            // Increment the scan counter
+            this.scanCounter++;
+            
+            // Scan every 3rd call
+            if (this.scanCounter % 3 !== 0) return;
+            
+            printInfo(`AIPlayer: "${this.username}" EXECUTING FULL SCAN at (${this.x}, ${this.z}, ${this.level})`);
             
             // Scan for NPCs within range
             let npcsFound = 0;
@@ -432,6 +385,50 @@ export default class AIPlayer extends PlayerClass {
                 }
             });
             
+            // NEW: Scan for trees and other static objects within range
+            let treesFound = 0;
+            const treeIds = [1276, 1277, 1278, 1279, 1280, 1282, 1283, 1284, 1285, 1286, 1289, 1290]; // Common tree IDs
+            
+            // Scan area within radius to find trees
+            const treeInfo: Array<{ id: number, x: number, z: number, distance: number }> = [];
+            
+            // Narrow scanning for trees to avoid overwhelming
+            const reducedRadius = Math.min(3, radius); // Use smaller radius for tree scanning
+            printInfo(`AIPlayer: "${this.username}" starting tree scan with radius ${reducedRadius}`);
+            
+            try {
+                for (let xOffset = -reducedRadius; xOffset <= reducedRadius; xOffset++) {
+                    for (let zOffset = -reducedRadius; zOffset <= reducedRadius; zOffset++) {
+                        const scanX = this.x + xOffset;
+                        const scanZ = this.z + zOffset;
+                        
+                        // Try to find trees at this position
+                        for (const treeId of treeIds) {
+                            try {
+                                // Check if World.getLoc exists and is callable
+                                if (typeof World.getLoc === 'function') {
+                                    const tree = World.getLoc(scanX, scanZ, this.level, treeId);
+                                    if (tree) {
+                                        treesFound++;
+                                        const distance = Math.max(Math.abs(xOffset), Math.abs(zOffset));
+                                        printInfo(`AIPlayer: "${this.username}" found tree: ID=${treeId} at (${scanX}, ${scanZ}), distance=${distance}`);
+                                        treeInfo.push({ id: treeId, x: scanX, z: scanZ, distance });
+                                        break; // Found a tree at this position, no need to check other tree IDs
+                                    }
+                                } else {
+                                    printError(`AIPlayer: "${this.username}" - World.getLoc is not a function`);
+                                    break;
+                                }
+                            } catch (e) {
+                                printError(`AIPlayer: "${this.username}" error checking for tree at (${scanX}, ${scanZ}): ${e}`);
+                            }
+                        }
+                    }
+                }
+            } catch (err) {
+                printError(`AIPlayer: "${this.username}" error in tree scanning loop: ${err}`);
+            }
+            
             // Check for obstacles by analyzing our current waypoint path
             // This is a simple way to detect obstacles without using complex APIs
             const pathBlocked = !this.hasWaypoints() && this.stuckCounter > 0;
@@ -440,13 +437,96 @@ export default class AIPlayer extends PlayerClass {
             }
             
             // Print summary
-            printInfo(`AIPlayer: "${this.username}" found ${npcsFound} NPCs and ${playersFound} players within range. Path blocked: ${pathBlocked}`);
+            printInfo(`AIPlayer: "${this.username}" found ${npcsFound} NPCs, ${playersFound} players, and ${treesFound} trees within range. Path blocked: ${pathBlocked}`);
             
             // Process the environmental data to make intelligent decisions
-            this.processEnvironmentalData(playersFound, npcsFound, pathBlocked);
+            this.processEnvironmentalData(playersFound, npcsFound, pathBlocked, treesFound, treeInfo);
             
         } catch (err) {
             printError(`AIPlayer: Error scanning surroundings for "${this.username}": ${err}`);
+        }
+    }
+
+    /**
+     * Process environmental data from the scanning to make intelligent decisions
+     * @param nearbyPlayers Number of players detected nearby
+     * @param nearbyNpcs Number of NPCs detected nearby
+     * @param pathBlocked Whether the path is blocked
+     * @param nearbyTrees Number of trees detected nearby
+     */
+    private processEnvironmentalData(
+        nearbyPlayers: number, 
+        nearbyNpcs: number, 
+        pathBlocked: boolean, 
+        nearbyTrees: number = 0,
+        treeInfo: Array<{ id: number, x: number, z: number, distance: number }> = []
+    ): void {
+        try {
+            // Log the data processing
+            printInfo(`AIPlayer: "${this.username}" processing environmental data: ${nearbyPlayers} players, ${nearbyNpcs} NPCs, ${nearbyTrees} trees, path blocked: ${pathBlocked}`);
+            
+            // If path is blocked, consider alternative routes
+            if (pathBlocked) {
+                printInfo(`AIPlayer: "${this.username}" detected obstacle, considering route change`);
+                
+                // If we're stuck for too long, try skipping to the next waypoint
+                if (this.stuckCounter > 10) {
+                    printInfo(`AIPlayer: "${this.username}" making intelligent decision to skip current waypoint`);
+                    
+                    // Increment waypoint index to skip the problematic waypoint
+                    this.currentWaypointIndex++;
+                    
+                    const currentPath = this.movingToTarget ? this.LUMBRIDGE_TO_VARROCK : this.VARROCK_TO_LUMBRIDGE;
+                    
+                    // Check if we've completed the path
+                    if (this.currentWaypointIndex >= currentPath.length) {
+                        printInfo(`AIPlayer: "${this.username}" intelligently decided to reverse direction`);
+                        this.movingToTarget = !this.movingToTarget;
+                        this.currentWaypointIndex = 0;
+                    }
+                    
+                    // Reset stuck counter after making a decision
+                    this.stuckCounter = 0;
+                    
+                    // Queue next waypoint
+                    this.moveToNextWaypoint();
+                    
+                    return;
+                }
+            }
+            
+            // React to nearby trees - in future this could include woodcutting
+            if (nearbyTrees > 0 && treeInfo.length > 0) {
+                printInfo(`AIPlayer: "${this.username}" noticed ${nearbyTrees} trees nearby and could interact with them`);
+                
+                // Occasionally (10% chance) decide to interact with a tree
+                if (Math.random() < 0.1) {
+                    // Find the closest tree
+                    const closestTree = treeInfo.reduce((closest, current) => {
+                        return current.distance < closest.distance ? current : closest;
+                    }, treeInfo[0]);
+                    
+                    printInfo(`AIPlayer: "${this.username}" decided to interact with a tree at (${closestTree.x}, ${closestTree.z})`);
+                    
+                    // Interact with the tree
+                    this.interactWithTree(closestTree.id, closestTree.x, closestTree.z);
+                }
+            }
+            
+            // React to nearby players - in future this could include following, trading, or chatting
+            if (nearbyPlayers > 0) {
+                printInfo(`AIPlayer: "${this.username}" noticed ${nearbyPlayers} players nearby and is tracking them`);
+                // Future enhancement: Track known players and their movements
+            }
+            
+            // React to nearby NPCs - in future this could include combat or interaction
+            if (nearbyNpcs > 0) {
+                printInfo(`AIPlayer: "${this.username}" noticed ${nearbyNpcs} NPCs nearby and is monitoring them`);
+                // Future enhancement: Identify hostile vs. friendly NPCs
+            }
+            
+        } catch (err) {
+            printError(`AIPlayer: Error processing environmental data for "${this.username}": ${err}`);
         }
     }
 
@@ -480,16 +560,34 @@ export default class AIPlayer extends PlayerClass {
     }
 
     /**
+     * A dedicated debug method that will always log, regardless of game ticks
+     * This helps verify if intervals are running at all
+     */
+    private debugIntervalCheck(): void {
+        const now = new Date();
+        printInfo(`AIPlayer DEBUG: "${this.username}" interval check at ${now.toISOString()} - active=${this.active}, isActive=${this.isActive}`);
+    }
+
+    /**
      * Start a movement cycle that walks between two points
      * This movement is visually important but the heartbeat is what actually prevents logout
      */
     public startMovementCycle(): void {
         printInfo(`AIPlayer: Enhanced movement cycle with environmental awareness for "${this.username}"`);
         
+        // Add immediate debug check
+        this.debugIntervalCheck();
+        
         // Clear any existing movement timer
         if (this.moveInterval) {
             clearInterval(this.moveInterval);
             this.moveInterval = null;
+        }
+        
+        // Clear any existing debug interval
+        if (this.debugInterval) {
+            clearInterval(this.debugInterval);
+            this.debugInterval = null;
         }
         
         // Initialize movement state
@@ -504,11 +602,21 @@ export default class AIPlayer extends PlayerClass {
         // First movement - move to first waypoint
         this.moveToNextWaypoint();
         
+        // Immediate scan for debugging - this should show up in logs
+        printInfo(`AIPlayer: "${this.username}" initial scan on movement cycle start`);
+        this.scanSurroundings();
+        
+        // Set up a separate pure debug interval that runs more frequently
+        this.debugInterval = setInterval(() => {
+            this.debugIntervalCheck();
+        }, 10000); // Run every 10 seconds
+        
         // Set up interval for continuous movement
         this.moveInterval = setInterval(() => {
             if (this.active && this.isActive) {
-                // Scan surroundings for environmental awareness
-                // This will also process the data and influence AI decisions
+                printInfo(`AIPlayer: "${this.username}" movement interval tick at ${World.currentTick}`);
+                
+                // Explicitly call scan surroundings - not dependent on other conditions
                 this.scanSurroundings();
                 
                 // Log current path state for debugging
@@ -760,24 +868,30 @@ export default class AIPlayer extends PlayerClass {
    * Clean up resources when the AI player is deactivated
    */
     public cleanup(): void {
-    // Clear the movement interval
+        // Clear the movement interval
         if (this.moveInterval) {
             clearInterval(this.moveInterval);
             this.moveInterval = null;
         }
-    
+        
         // Clear the heartbeat interval
         if (this.heartbeatInterval) {
             clearInterval(this.heartbeatInterval);
             this.heartbeatInterval = null;
         }
-    
+        
         // Clear the keepalive interval
         if (this.keepaliveInterval) {
             clearInterval(this.keepaliveInterval);
             this.keepaliveInterval = null;
         }
-    
+        
+        // Clear the debug interval
+        if (this.debugInterval) {
+            clearInterval(this.debugInterval);
+            this.debugInterval = null;
+        }
+        
         // Call the parent cleanup method
         super.cleanup();
     }
@@ -1006,6 +1120,97 @@ export default class AIPlayer extends PlayerClass {
         if (this.levels[3] <= 0) {
             // Handle death event
             this.handlePlayerDeath();
+        }
+    }
+
+    /**
+     * Attempt to interact with a nearby tree for woodcutting
+     * @param treeId The ID of the tree to interact with
+     * @param x The x coordinate of the tree
+     * @param z The z coordinate of the tree
+     */
+    public interactWithTree(treeId: number, x: number, z: number): void {
+        try {
+            printInfo(`AIPlayer: "${this.username}" attempting to interact with tree ${treeId} at (${x}, ${z})`);
+            
+            // First, check if we have the right tools (axe) in inventory or equipped
+            // For now, we'll simulate having the tools
+            const hasAxe = true; // In a real implementation, check inventory
+            
+            if (!hasAxe) {
+                printInfo(`AIPlayer: "${this.username}" can't interact with tree - no axe available`);
+                return;
+            }
+            
+            // Check if we're in range of the tree
+            const distanceX = Math.abs(this.x - x);
+            const distanceZ = Math.abs(this.z - z);
+            const distance = Math.max(distanceX, distanceZ);
+            
+            // If we're too far, move closer first
+            if (distance > 1) {
+                printInfo(`AIPlayer: "${this.username}" moving closer to tree at (${x}, ${z}), current distance: ${distance}`);
+                
+                // Clear existing waypoints
+                this.clearWaypoints();
+                
+                // Queue waypoint to get adjacent to the tree
+                this.queueWaypoint(x, z);
+                
+                // Set callback to interact when we arrive
+                setTimeout(() => {
+                    const newDistanceX = Math.abs(this.x - x);
+                    const newDistanceZ = Math.abs(this.z - z);
+                    const newDistance = Math.max(newDistanceX, newDistanceZ);
+                    
+                    if (newDistance <= 1) {
+                        // We're now close enough to interact
+                        this.performTreeInteraction(treeId, x, z);
+                    }
+                }, 3000); // Check again after 3 seconds
+                
+                return;
+            }
+            
+            // We're close enough, perform the interaction
+            this.performTreeInteraction(treeId, x, z);
+            
+        } catch (err) {
+            printError(`AIPlayer: Error interacting with tree for "${this.username}": ${err}`);
+        }
+    }
+
+    /**
+     * Perform the actual tree interaction (woodcutting)
+     * @param treeId The ID of the tree to interact with
+     * @param x The x coordinate of the tree
+     * @param z The z coordinate of the tree
+     */
+    private performTreeInteraction(treeId: number, x: number, z: number): void {
+        try {
+            printInfo(`AIPlayer: "${this.username}" performing tree interaction with ${treeId} at (${x}, ${z})`);
+            
+            // Get the tree location object
+            const tree = World.getLoc(x, z, this.level, treeId);
+            if (!tree) {
+                printInfo(`AIPlayer: "${this.username}" couldn't find tree ${treeId} at (${x}, ${z})`);
+                return;
+            }
+            
+            // Simulate woodcutting animation (would be done by the game engine)
+            this.playAnimation(867, 0); // Woodcutting animation ID
+            
+            // Log the interaction
+            printInfo(`AIPlayer: "${this.username}" is now woodcutting at (${x}, ${z})`);
+            
+            // In a real implementation, this would:
+            // 1. Trigger the woodcutting script
+            // 2. Add logs to inventory when successful
+            // 3. Gain XP from the action
+            // 4. Handle tree depletion
+            
+        } catch (err) {
+            printError(`AIPlayer: Error in tree interaction for "${this.username}": ${err}`);
         }
     }
 }
