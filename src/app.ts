@@ -5,6 +5,7 @@ import { collectDefaultMetrics, register } from 'prom-client';
 
 import { packClient, packServer } from '#/cache/PackAll.js';
 import AIPlayer from '#/engine/entity/ai/AIPlayer.js';
+import MerchantPlayer from '#/engine/entity/ai/MerchantPlayer.js';
 import World from '#/engine/World.js';
 import TcpServer from '#/server/tcp/TcpServer.js';
 import WSServer from '#/server/ws/WSServer.js';
@@ -46,8 +47,8 @@ setTimeout(() => {
     try {
         printInfo('Spawning AI players for testing...');
         // Create and spawn two AI players in Lumbridge
-        const ai1 = AIPlayer.spawn('AITester1', 22, 22); // Lumbridge center
-        const ai2 = AIPlayer.spawn('AITester2', 22, 22); // Slightly offset from center
+        const ai1 = MerchantPlayer.spawn('MerchantTester1', 3182, 3438); // Lumbridge center
+        const ai2 = AIPlayer.spawn('MerchantTester1', 3182, 3438); // Lumbridge center
         if (ai1 && ai2) {
             printInfo('AI players spawned successfully');
             printInfo(`Total players in world: ${World.getTotalPlayers()}`);

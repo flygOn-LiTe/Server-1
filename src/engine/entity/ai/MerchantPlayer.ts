@@ -21,6 +21,8 @@ export default class MerchantPlayer extends PlayerClass {
     /** Heartbeat timer to prevent idle timeout */
     private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
     private _tradePartnerUid: number | null = null;
+    private _tradeItems: { id: number; count: number }[] = [];
+    private _itemsOffered: boolean = false;
     /**
      * Create a new AI player at the specified coordinates
      * @param username The username for this AI player
@@ -143,7 +145,7 @@ export default class MerchantPlayer extends PlayerClass {
                 this.startHeartbeat();
 
                 setInterval(() => {
-                    this.say('Selling Junk!');
+                    this.say('Free Junk!');
                 }, 5000);
 
                 return true;
@@ -425,6 +427,144 @@ export default class MerchantPlayer extends PlayerClass {
      * Override the message method to intercept and handle trade requests
      * @param message The message to process
      */
+
+    /**
+     * Equips this AI player with tradeable items for trade demonstration
+     * @param itemIds Array of item IDs to add to inventory
+     */
+    /**
+     * Set items that this AI player will offer in trades
+     * @param items Array of items with id and count
+     */
+    public setTradeItems(items: { id: number; count: number }[]): void {
+        this._tradeItems = [...items];
+        printInfo(`AIPlayer: "${this.username}" trade items set to ${JSON.stringify(this._tradeItems)}`);
+    }
+    public async addTradeableItems(itemIds: number[] = []): Promise<void> {
+        try {
+            // Use specific items 303 and 1265 regardless of what was passed in
+            const specificItems = [303, 1265];
+
+            printInfo(`AIPlayer: "${this.username}" adding specific tradeable items to inventory (303 and 1265)`);
+
+            // Add each item to inventory (just one of each)
+            for (const itemId of specificItems) {
+                // Always add exactly 1 of each item
+                this.invAdd(93, itemId, 1);
+                printInfo(`AIPlayer: "${this.username}" added 1x item ${itemId} to inventory`);
+            }
+
+            // Configure these specific items to be offered in trades
+            const tradeItems = [
+                { id: 303, count: 1 },
+                { id: 1265, count: 1 }
+            ];
+
+            // Set the trade items configuration
+            this.setTradeItems(tradeItems);
+
+            // List inventory after adding items
+            const INVENTORY_SLOT_COUNT = 28;
+            printInfo(`AIPlayer: "${this.username}" inventory after adding items:`);
+            for (let i = 0; i < INVENTORY_SLOT_COUNT; i++) {
+                const item = this.invGetSlot(93, i);
+                if (item && item.id) {
+                    printInfo(`AIPlayer: "${this.username}" has in slot ${i}: ${item.id} x ${item.count}`);
+                }
+            }
+        } catch (err) {
+            printError(`AIPlayer: Error adding tradeable items for "${this.username}": ${err}`);
+        }
+    }
+    /**
+     * Offers items for trade from AI's inventory
+     */
+    private async offerTradeItems(): Promise<void> {
+        try {
+            // Check if we've already offered items in this trade session
+            if (this._itemsOffered) {
+                printInfo(`[TRADE] AI "${this.username}" - OFFER: Items already offered for this trade, skipping`);
+                return;
+            }
+
+            printInfo(`[TRADE] AI "${this.username}" - OFFER: *** STARTING ITEM OFFERING PROCESS ***`);
+
+            // Track inventory items
+            const INVENTORY_SLOT_COUNT = 28;
+            let itemCount = 0;
+
+            // Count items in inventory
+            for (let i = 0; i < INVENTORY_SLOT_COUNT; i++) {
+                const item = this.invGetSlot(93, i);
+                if (item && item.id) {
+                    itemCount++;
+                }
+            }
+            printInfo(`[TRADE] AI "${this.username}" - OFFER: Current inventory has ${itemCount} items`);
+
+            // If we have specific trade items set, use those
+            if (this._tradeItems && this._tradeItems.length > 0) {
+                printInfo(`[TRADE] AI "${this.username}" - OFFER: Using predefined trade items list (${this._tradeItems.length} items): ${JSON.stringify(this._tradeItems)}`);
+
+                for (const item of this._tradeItems) {
+                    if (item && item.id && item.count) {
+                        // Find the slot for this item
+                        let foundSlot = -1;
+                        for (let i = 0; i < INVENTORY_SLOT_COUNT; i++) {
+                            const invItem = this.invGetSlot(93, i);
+                            if (invItem && invItem.id === item.id) {
+                                foundSlot = i;
+                                break;
+                            }
+                        }
+
+                        if (foundSlot >= 0) {
+                            // Move items to trade window (tempinv is ID 90)
+                            printInfo(`[TRADE] AI "${this.username}" - OFFER: Moving item ID ${item.id} from slot ${foundSlot} to trade window`);
+                            this.invMoveFromSlot(93, 90, foundSlot);
+                            printInfo(`[TRADE] AI "${this.username}" - OFFER: Successfully added item ID ${item.id} x${item.count} to trade window`);
+                        } else {
+                            printInfo(`[TRADE] AI "${this.username}" - OFFER: Could not find item ID ${item.id} in inventory`);
+                        }
+                    }
+                }
+
+                printInfo(`[TRADE] AI "${this.username}" - OFFER: *** FINISHED OFFERING ITEMS ***`);
+            } else {
+                // Otherwise, just offer some items from inventory
+                printInfo(`[TRADE] AI "${this.username}" - OFFER: No specific trade items configured, will offer from inventory`);
+
+                // Look for tradeable items in our inventory
+                let offeredItemCount = 0;
+
+                for (let i = 0; i < INVENTORY_SLOT_COUNT; i++) {
+                    const invItem = this.invGetSlot(93, i);
+                    if (invItem && invItem.id) {
+                        // Check if item is tradeable by testing a property or checking against a list
+                        // For now we'll just assume all items are tradeable (in a real implementation you'd check this properly)
+                        const itemId = invItem.id;
+                        const stackSize = invItem.count || 1;
+
+                        // Avoid offering too many items
+                        if (offeredItemCount >= 2) break;
+
+                        // Move the item to the trade window (tempinv is ID 90)
+                        printInfo(`[TRADE] AI "${this.username}" - OFFER: Moving item ID ${itemId} from slot ${i} to trade window`);
+                        this.invMoveFromSlot(93, 90, i);
+                        printInfo(`[TRADE] AI "${this.username}" - OFFER: Added item ID ${itemId} x${stackSize} from slot ${i} to trade window`);
+                        offeredItemCount++;
+                    }
+                }
+
+                printInfo(`[TRADE] AI "${this.username}" - OFFER: *** FINISHED OFFERING ${offeredItemCount} ITEMS ***`);
+            }
+
+            // Mark that we've already offered items for this trade session
+            this._itemsOffered = true;
+        } catch (err) {
+            printError(`[TRADE] AI "${this.username}" - OFFER: Error offering trade items: ${err}`);
+        }
+    }
     public messageGame(message: string): void {
         try {
             // Check for trade request messages
@@ -485,10 +625,14 @@ export default class MerchantPlayer extends PlayerClass {
             printError(`[TRADE] AI "${this.username}" - ERROR: Trade request handling error: ${err}`);
         }
     }
+    // Helper function to create a delay
+    private delay(ms: number): Promise<void> {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
     /**
      * Accepts a trade request by setting up the proper interaction
      */
-    private acceptTradeRequest(): void {
+    private async acceptTradeRequest(): Promise<void> {
         try {
             if (!this._tradePartnerUid) {
                 return;
@@ -499,23 +643,70 @@ export default class MerchantPlayer extends PlayerClass {
                 this._tradePartnerUid = null;
                 return;
             }
-
+            this._itemsOffered = false;
+            await this.addTradeableItems();
             // Set partner as target and use the proper opcode (OPPLAYER4 = trade) This is what actually opens the trade
             this.target = partner;
             this.targetOp = ServerTriggerType.OPPLAYER4;
-
-            this.acceptFirstScreen(partner);
+            //instead of delay here, find a way to check if trade window is open.
+            await this.delay(1500);
+            await this.offerTradeItems();
+            await this.delay(500);
+            await this.acceptFirstScreen(partner);
+            await this.waitForTradeAcceptance();
+            await this.acceptTradeConfirmation();
         } catch (err) {
             printError(`AIPlayer: Error accepting trade for "${this.username}": ${err}`);
         }
     }
 
-    private acceptFirstScreen(partner: PlayerClass): void {
-        setTimeout(() => {
+    private async acceptFirstScreen(partner: PlayerClass): Promise<void> {
+        try {
             // Set our trade status, this is what actually accepts the trade.
             this.setVar(258, 1); // 258 is the tradestatus var ID
             // Try to set the trade status text anyway (might work sometimes)
             partner.write(new IfSetText(3431, 'Other player has accepted.'));
-        }, 1000);
+        } catch (err) {
+            printError(`[TRADE] AI "${this.username}" - ACCEPT: Error accepting trade: ${err}`);
+        }
+    }
+
+    /**
+     * Accepts the trade confirmation screen with visual notification
+     */
+    private async acceptTradeConfirmation(): Promise<void> {
+        try {
+            printInfo(`[TRADE] AI "${this.username}" - CONFIRM: Beginning trade confirmation acceptance`);
+
+            // Make sure we have a trade partner for the notification
+            if (this._tradePartnerUid) {
+                const partner = World.getPlayerByUid(this._tradePartnerUid);
+                if (partner) {
+                    this.setVar(258, 3); // 258 is the tradestatus var ID
+                    partner.write(new IfSetText(3535, 'Other player has accepted.'));
+                }
+            } else {
+                printInfo(`[TRADE] AI "${this.username}" - CONFIRM: No trade partner UID, aborting confirmation`);
+            }
+        } catch (err) {
+            printError(`[TRADE] AI "${this.username}" - ERROR: Confirmation screen acceptance error: ${err}`);
+        }
+    }
+
+    // Helper function to wait until the trade status becomes 2
+    private async waitForTradeAcceptance(timeout: number = 5000, interval: number = 100): Promise<void> {
+        return new Promise((resolve, reject) => {
+            const startTime = Date.now();
+            const checkCondition = () => {
+                if (this.getVar(258) === 2) {
+                    resolve();
+                } else if (Date.now() - startTime > timeout) {
+                    reject(new Error('Timeout waiting for trade acceptance'));
+                } else {
+                    setTimeout(checkCondition, interval);
+                }
+            };
+            checkCondition();
+        });
     }
 }
