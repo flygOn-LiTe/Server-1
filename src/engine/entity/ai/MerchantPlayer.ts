@@ -721,9 +721,9 @@ export default class MerchantPlayer extends PlayerClass {
             if (type !== timer.type) {
                 continue;
             }
-
+            const parts = timer.script.name.replace(/^\[|\]$/g, '').split(',');
             // Skip general_macro_events timer for AI players
-            if (timer.script.name === 'general_macro_events') {
+            if (parts[1] === 'general_macro_events') {
                 continue;
             }
 
