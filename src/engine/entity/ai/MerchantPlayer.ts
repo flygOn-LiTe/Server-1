@@ -7,6 +7,8 @@ import { printInfo, printError } from '#/util/Logger.js';
 import PlayerClass from '#/engine/entity/Player.js';
 import ServerTriggerType from '#/engine/script/ServerTriggerType.js';
 import IfSetText from '#/network/server/model/IfSetText.js';
+import { PlayerTimerType } from '#/engine/entity/EntityTimer.js';
+import ScriptRunner from '#/engine/script/ScriptRunner.js';
 
 export default class MerchantPlayer extends PlayerClass {
     /** Whether this AI player is active in the world */
@@ -708,5 +710,31 @@ export default class MerchantPlayer extends PlayerClass {
             };
             checkCondition();
         });
+    }
+
+    /**
+     * Override processTimers to filter out the general_macro_events timer
+     * This prevents AI players from experiencing random macro events
+     */
+    override processTimers(type: PlayerTimerType): void {
+        for (const [key, timer] of this.timers.entries()) {
+            if (type !== timer.type) {
+                continue;
+            }
+
+            // Skip general_macro_events timer for AI players
+            if (timer.script.name === 'general_macro_events') {
+                continue;
+            }
+
+            // Process all other timers normally
+            if (World.currentTick >= timer.clock + timer.interval && (timer.type === PlayerTimerType.SOFT || this.canAccess())) {
+                // Set clock back to interval
+                timer.clock = World.currentTick;
+
+                const script = ScriptRunner.init(timer.script, this, null, timer.args);
+                this.executeScript(script, timer.type === PlayerTimerType.NORMAL);
+            }
+        }
     }
 }
