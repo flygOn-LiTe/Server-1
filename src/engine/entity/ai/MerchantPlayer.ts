@@ -717,7 +717,7 @@ export default class MerchantPlayer extends PlayerClass {
      * This prevents AI players from experiencing random macro events
      */
     override processTimers(type: PlayerTimerType): void {
-        for (const [key, timer] of this.timers.entries()) {
+        for (const timer of this.timers.values()) {
             if (type !== timer.type) {
                 continue;
             }
