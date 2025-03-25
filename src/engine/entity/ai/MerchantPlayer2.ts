@@ -80,9 +80,10 @@ export default class MerchantPlayer2 extends PlayerClass {
         // Randomize appearance and properties for the AI character
         // Random gender (0 = male, 1 = female)
         this.gender = Math.random() < 0.5 ? 0 : 1;
-        
+
         // Set body parts based on gender
-        if (this.gender === 0) { // Male
+        if (this.gender === 0) {
+            // Male
             // Valid male body parts for hair, beard, torso, arms, hands, legs, feet
             const maleHairStyles = [0, 1, 2, 3, 4, 5, 6, 7, 8]; // Male hair styles
             const maleBeards = [10, 11, 12, 13, 14, 15, 16, 17]; // Male facial hair
@@ -91,7 +92,7 @@ export default class MerchantPlayer2 extends PlayerClass {
             const maleHands = [33, 34]; // Male hands
             const maleLegs = [36, 37, 38, 39, 40]; // Male legs
             const maleFeet = [42, 43, 44]; // Male feet
-            
+
             this.body = [
                 maleHairStyles[Math.floor(Math.random() * maleHairStyles.length)],
                 maleBeards[Math.floor(Math.random() * maleBeards.length)],
@@ -101,7 +102,8 @@ export default class MerchantPlayer2 extends PlayerClass {
                 maleLegs[Math.floor(Math.random() * maleLegs.length)],
                 maleFeet[Math.floor(Math.random() * maleFeet.length)]
             ];
-        } else { // Female
+        } else {
+            // Female
             // Valid female body parts IDs
             const femaleHairStyles = [45, 46, 47, 48, 49, 50, 51, 52, 53]; // Female hair styles
             const femaleTorsos = [56, 57, 58, 59]; // Female torsos
@@ -109,7 +111,7 @@ export default class MerchantPlayer2 extends PlayerClass {
             const femaleHands = [67, 68]; // Female hands
             const femaleLegs = [70, 71, 72, 73]; // Female legs
             const femaleFeet = [79, 80]; // Female feet
-            
+
             this.body = [
                 femaleHairStyles[Math.floor(Math.random() * femaleHairStyles.length)],
                 0, // No beard for female
@@ -120,13 +122,13 @@ export default class MerchantPlayer2 extends PlayerClass {
                 femaleFeet[Math.floor(Math.random() * femaleFeet.length)]
             ];
         }
-        
+
         // Randomize colors (using limited valid ranges)
         // [hair color, torso color, legs color, feet color, skin color]
         const hairColors = [0, 1, 2, 3, 4, 5, 6, 7]; // Valid hair colors
         const clothingColors = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]; // Valid clothing colors
         const skinColors = [0, 1, 2, 3, 4, 5, 6, 7]; // Valid skin colors
-        
+
         this.colors = [
             hairColors[Math.floor(Math.random() * hairColors.length)],
             clothingColors[Math.floor(Math.random() * clothingColors.length)],
@@ -145,7 +147,7 @@ export default class MerchantPlayer2 extends PlayerClass {
             const randomLevel = Math.floor(Math.random() * 20) + 1;
             // XP calculation is simplified, actual formula would be more complex
             const randomXP = Math.floor(Math.pow(randomLevel, 2.2) * 50);
-            
+
             this.stats[i] = randomXP;
             this.baseLevels[i] = randomLevel;
             this.levels[i] = randomLevel;
@@ -157,7 +159,7 @@ export default class MerchantPlayer2 extends PlayerClass {
             this.baseLevels[3] = 10;
             this.levels[3] = 10;
         }
-        
+
         // Set a reasonable combat level between 3 and 30
         this.combatLevel = Math.floor(Math.random() * 28) + 3;
 
@@ -223,14 +225,14 @@ export default class MerchantPlayer2 extends PlayerClass {
             { id: 1059, count: 1, price: 200, name: 'Leather gloves' },
             { id: 115, count: 1, price: 1000, name: 'Strength potion' },
             { id: 225, count: 1, price: 700, name: 'Limpwurt root' },
-            
+
             // Weapons
             { id: 1277, count: 1, price: 200, name: 'Bronze sword' },
             { id: 1291, count: 1, price: 250, name: 'Bronze longsword' },
             { id: 1321, count: 1, price: 400, name: 'Bronze scimitar' },
             { id: 841, count: 1, price: 350, name: 'Shortbow' },
             { id: 882, count: 100, price: 300, name: 'Bronze arrows' },
-            
+
             // Adamant weapons
             { id: 1287, count: 1, price: 2800, name: 'Adamant sword' },
             { id: 1301, count: 1, price: 3400, name: 'Adamant longsword' },
@@ -241,7 +243,7 @@ export default class MerchantPlayer2 extends PlayerClass {
             { id: 1430, count: 1, price: 3700, name: 'Adamant mace' },
             { id: 845, count: 1, price: 2900, name: 'Adamant dagger' },
             { id: 890, count: 100, price: 1200, name: 'Adamant arrows' },
-            
+
             // Rune weapons
             { id: 1289, count: 1, price: 20000, name: 'Rune sword' },
             { id: 1303, count: 1, price: 25000, name: 'Rune longsword' },
@@ -251,14 +253,14 @@ export default class MerchantPlayer2 extends PlayerClass {
             { id: 1373, count: 1, price: 28000, name: 'Rune battleaxe' },
             { id: 1432, count: 1, price: 26000, name: 'Rune mace' },
             { id: 892, count: 100, price: 4500, name: 'Rune arrows' },
-            
+
             // Armor
             { id: 1117, count: 1, price: 800, name: 'Bronze platebody' },
             { id: 1075, count: 1, price: 700, name: 'Bronze platelegs' },
             { id: 1155, count: 1, price: 400, name: 'Bronze full helm' },
             { id: 1173, count: 1, price: 300, name: 'Bronze sq shield' },
             { id: 1139, count: 1, price: 600, name: 'Bronze chainbody' },
-            
+
             // Adamant armor
             { id: 1123, count: 1, price: 8000, name: 'Adamant platebody' },
             { id: 1073, count: 1, price: 6000, name: 'Adamant platelegs' },
@@ -267,7 +269,7 @@ export default class MerchantPlayer2 extends PlayerClass {
             { id: 1145, count: 1, price: 5000, name: 'Adamant chainbody' },
             { id: 1199, count: 1, price: 8200, name: 'Adamant kiteshield' },
             { id: 1091, count: 1, price: 6400, name: 'Adamant plateskirt' },
-            
+
             // Rune armor
             { id: 1127, count: 1, price: 65000, name: 'Rune platebody' },
             { id: 1079, count: 1, price: 48000, name: 'Rune platelegs' },
@@ -276,21 +278,21 @@ export default class MerchantPlayer2 extends PlayerClass {
             { id: 1147, count: 1, price: 42000, name: 'Rune chainbody' },
             { id: 1201, count: 1, price: 70000, name: 'Rune kiteshield' },
             { id: 1093, count: 1, price: 46000, name: 'Rune plateskirt' },
-            
+
             // Consumables and supplies
             { id: 315, count: 10, price: 120, name: 'Shrimps' },
             { id: 1925, count: 1, price: 30, name: 'Bucket' },
             { id: 1931, count: 1, price: 20, name: 'Pot' },
             { id: 229, count: 5, price: 100, name: 'Vials' },
             { id: 233, count: 1, price: 1200, name: 'Pestle and mortar' },
-            
+
             // Potions and ingredients
             { id: 121, count: 1, price: 1000, name: 'Attack potion' },
             { id: 175, count: 1, price: 1100, name: 'Antipoison' },
             { id: 199, count: 1, price: 900, name: 'Prayer potion' },
             { id: 145, count: 1, price: 1300, name: 'Super attack' },
             { id: 157, count: 1, price: 1300, name: 'Super strength' },
-            
+
             // Crafting/Magic supplies
             { id: 1755, count: 1, price: 500, name: 'Chisel' },
             { id: 1734, count: 1, price: 800, name: 'Thread' },
@@ -299,25 +301,19 @@ export default class MerchantPlayer2 extends PlayerClass {
             { id: 555, count: 100, price: 400, name: 'Water runes' },
             { id: 557, count: 100, price: 400, name: 'Earth runes' },
             { id: 554, count: 100, price: 400, name: 'Fire runes' },
-            
+
             // Mining/Smithing supplies
             { id: 440, count: 10, price: 300, name: 'Iron ore' },
             { id: 453, count: 10, price: 200, name: 'Coal' },
             { id: 2347, count: 1, price: 1000, name: 'Hammer' },
-            
-            // Farming/Herblore
-            { id: 5341, count: 1, price: 600, name: 'Rake' },
-            { id: 5343, count: 1, price: 900, name: 'Seed dibber' },
-            { id: 5329, count: 1, price: 1500, name: 'Gardening trowel' },
-            { id: 6055, count: 10, price: 800, name: 'Barley seeds' },
-            
+
             // Miscellaneous
             { id: 1059, count: 1, price: 200, name: 'Leather gloves' },
             { id: 1635, count: 1, price: 500, name: 'Gold ring' },
             { id: 1731, count: 1, price: 1200, name: 'Amulet of power' },
             { id: 952, count: 1, price: 300, name: 'Spade' }
         ];
-        
+
         // Select a random item to sell initially
         this.selectRandomItemToSell();
     }
@@ -402,14 +398,14 @@ export default class MerchantPlayer2 extends PlayerClass {
             clearInterval(this._saleAnnouncementInterval);
         }
 
-        // Calculate a random initial delay (between 1-5 seconds) 
+        // Calculate a random initial delay (between 1-5 seconds)
         // This staggers the start time so merchants don't all announce simultaneously
         const initialDelay = Math.floor(Math.random() * 5000) + 1000;
-        
+
         // Calculate a random interval (between 8-15 seconds)
         // This varies the frequency of announcements for each merchant
         const announcementInterval = Math.floor(Math.random() * 7000) + 8000;
-        
+
         // Log the timing configuration
         printInfo(`AIPlayer: "${this.username}" will start announcing in ${initialDelay}ms with interval of ${announcementInterval}ms`);
 
@@ -421,7 +417,7 @@ export default class MerchantPlayer2 extends PlayerClass {
             } else {
                 this.say('Nothing to sell right now!');
             }
-            
+
             // Then start the interval for subsequent announcements
             this._saleAnnouncementInterval = setInterval(() => {
                 // Add variation to announcements
@@ -432,7 +428,7 @@ export default class MerchantPlayer2 extends PlayerClass {
                     `Quality ${this._currentSellingItem?.name} for sale! ${this._currentSellingItem?.price} gold!`,
                     `Looking for ${this._currentSellingItem?.name}? Only ${this._currentSellingItem?.price} gold!`
                 ];
-                
+
                 if (this._currentSellingItem) {
                     // Choose a random message from the list
                     const messageIndex = Math.floor(Math.random() * messages.length);
@@ -676,7 +672,7 @@ export default class MerchantPlayer2 extends PlayerClass {
             clearInterval(this._saleAnnouncementInterval);
             this._saleAnnouncementInterval = null;
         }
-        
+
         // Call the parent cleanup method
         super.cleanup();
     }
@@ -756,11 +752,9 @@ export default class MerchantPlayer2 extends PlayerClass {
             if (this._currentSellingItem) {
                 this.invAdd(93, this._currentSellingItem.id, this._currentSellingItem.count);
                 printInfo(`AIPlayer: "${this.username}" added ${this._currentSellingItem.count}x item ${this._currentSellingItem.id} (${this._currentSellingItem.name}) to inventory`);
-            
+
                 // Configure the current item to be offered in trades
-                this.setTradeItems([
-                    { id: this._currentSellingItem.id, count: this._currentSellingItem.count }
-                ]);
+                this.setTradeItems([{ id: this._currentSellingItem.id, count: this._currentSellingItem.count }]);
             } else {
                 printInfo(`AIPlayer: "${this.username}" has no item selected to sell`);
             }
@@ -944,35 +938,33 @@ export default class MerchantPlayer2 extends PlayerClass {
                 this._tradePartnerUid = null;
                 return;
             }
-            
+
             // Reset state for new trade
             this._itemsOffered = false;
-            
+
             // Add the currently selected item to inventory and prepare for trade
             await this.addTradeableItems();
-            
-            // Set partner as target and use the proper opcode (OPPLAYER4 = trade) 
+
+            // Set partner as target and use the proper opcode (OPPLAYER4 = trade)
             // This is what actually opens the trade
             this.target = partner;
             this.targetOp = ServerTriggerType.OPPLAYER4;
-            
+
             // Wait for trade window to open
             await this.delay(1500);
-            
+
             // Offer the items for trade
             await this.offerTradeItems();
             await this.delay(500);
-            
+
             // Check if we have an item to sell
             if (!this._currentSellingItem) {
                 partner.messageGame('Sorry, I have nothing to sell right now!');
                 return;
             }
-            
+
             // Define required gold amount
-            const requiredOffer = [
-                { id: 995, count: this._currentSellingItem.price }
-            ];
+            const requiredOffer = [{ id: 995, count: this._currentSellingItem.price }];
 
             // Inform player about the price
             partner.messageGame(`I'm selling ${this._currentSellingItem.name} for ${this._currentSellingItem.price} gold.`);
@@ -981,7 +973,7 @@ export default class MerchantPlayer2 extends PlayerClass {
             let tradeAccepted = false;
             let tradeFinished = false;
             let monitorInterval: ReturnType<typeof setInterval> | null = null;
-            
+
             // Create a monitoring interval that continuously checks the trade state
             monitorInterval = setInterval(async () => {
                 try {
@@ -993,12 +985,12 @@ export default class MerchantPlayer2 extends PlayerClass {
                         }
                         return;
                     }
-                    
+
                     // Get current trade status and check the offer
                     const tradeStatus = this.getVar(258);
                     const currentOffer = this.getTradeOffer(partner);
                     const isValid = this.isTradeOfferValid(currentOffer, requiredOffer);
-                    
+
                     // If the player has added the correct gold and we haven't accepted yet,
                     // or if we accepted before but they changed their offer and now it's valid again
                     if (isValid && (!tradeAccepted || tradeStatus === 0)) {
@@ -1016,7 +1008,7 @@ export default class MerchantPlayer2 extends PlayerClass {
                             partner.messageGame(`I need ${this._currentSellingItem.price} gold coins for my ${this._currentSellingItem.name}.`);
                         }
                     }
-                    
+
                     // If we've moved to the confirmation screen
                     if (tradeStatus === 2) {
                         await this.acceptTradeConfirmation();
@@ -1030,7 +1022,7 @@ export default class MerchantPlayer2 extends PlayerClass {
                     printError(`[TRADE] AI "${this.username}" - Error in trade monitor: ${err}`);
                 }
             }, 500); // Check every 500ms
-            
+
             // Set a safety timeout to prevent the interval from running forever
             setTimeout(() => {
                 if (monitorInterval) {
@@ -1040,9 +1032,10 @@ export default class MerchantPlayer2 extends PlayerClass {
                     printInfo(`[TRADE] AI "${this.username}" - Trade timed out after 2 minutes`);
                 }
             }, 120000); // 2 minute timeout
-            
+
             // After successful trade, potentially choose a new item to sell
-            if (Math.random() < 0.3) { // 30% chance to switch items after a trade
+            if (Math.random() < 0.3) {
+                // 30% chance to switch items after a trade
                 this.selectRandomItemToSell();
             }
         } catch (err) {
@@ -1150,22 +1143,22 @@ export default class MerchantPlayer2 extends PlayerClass {
 
         while (Date.now() - startTime < timeout) {
             const tradeOffer = this.getTradeOffer(partner);
-            
+
             // Only log every few seconds to avoid spamming
             if ((Date.now() - startTime) % 3000 < checkInterval) {
                 printInfo(`[TRADE] AI "${this.username}" - Checking trade offer: ${JSON.stringify(tradeOffer)}`);
             }
-            
+
             if (this.isTradeOfferValid(tradeOffer, requiredOffer)) {
                 printInfo(`[TRADE] AI "${this.username}" - Trade offer is valid.`);
                 partner.messageGame("That's the right amount! Let's trade.");
                 return true;
             }
-            
+
             // Wait a bit before checking again
             await this.delay(checkInterval);
         }
-        
+
         printInfo(`[TRADE] AI "${this.username}" - Trade offer did not meet the requirements within ${timeout}ms.`);
         return false;
     }
@@ -1216,18 +1209,18 @@ export default class MerchantPlayer2 extends PlayerClass {
      */
     public static spawnMerchant(username: string, x: number, z: number): MerchantPlayer2 {
         printInfo(`AIPlayer: Creating merchant "${username}" at (${x}, ${z})`);
-        
+
         // Create the merchant instance
         const merchant = new MerchantPlayer2(username, x, z, 0);
-        
+
         // Ensure equipment is fully set up before activation
         printInfo(`AIPlayer: Ensuring equipment is set up for "${username}"`);
         const WORN = 103;
         merchant.buildAppearance(WORN);
-        
+
         // Activate the merchant in the world
         merchant.activate(x, z);
-        
+
         // Final appearance refresh after activation
         setTimeout(() => {
             if (merchant.active) {
@@ -1235,7 +1228,7 @@ export default class MerchantPlayer2 extends PlayerClass {
                 merchant.buildAppearance(WORN);
             }
         }, 500);
-        
+
         return merchant;
     }
 
@@ -1255,10 +1248,10 @@ export default class MerchantPlayer2 extends PlayerClass {
             const shields = [1171, 1173, 1175, 1177, 1179, 1189, 1191, 1193, 1195, 1197]; // Various shields
             const capes = [1019, 1021, 1023, 1027, 1029, 1031]; // Various capes
             const amulets = [1704, 1725, 1727, 1729, 1731]; // Various amulets
-            
+
             // WORN equipment inventory (103)
             const WORN = 103;
-            
+
             // Equipment slots
             const HEAD_SLOT = 0;
             const CAPE_SLOT = 1;
@@ -1267,53 +1260,57 @@ export default class MerchantPlayer2 extends PlayerClass {
             const BODY_SLOT = 4;
             const SHIELD_SLOT = 5;
             const LEGS_SLOT = 7;
-            
+
             // Randomly determine if we'll equip an item in each slot (with different probabilities)
-            if (Math.random() < 0.7) { // 70% chance to have headgear
-                const headgear = Math.random() < 0.5 ? 
-                    helmets[Math.floor(Math.random() * helmets.length)] : 
-                    mediumHelmets[Math.floor(Math.random() * mediumHelmets.length)];
+            if (Math.random() < 0.7) {
+                // 70% chance to have headgear
+                const headgear = Math.random() < 0.5 ? helmets[Math.floor(Math.random() * helmets.length)] : mediumHelmets[Math.floor(Math.random() * mediumHelmets.length)];
                 this.invSet(WORN, headgear, 1, HEAD_SLOT);
                 printInfo(`AIPlayer: "${this.username}" equipped headgear: ${headgear}`);
             }
-            
-            if (Math.random() < 0.4) { // 40% chance to have a cape
+
+            if (Math.random() < 0.4) {
+                // 40% chance to have a cape
                 const cape = capes[Math.floor(Math.random() * capes.length)];
                 this.invSet(WORN, cape, 1, CAPE_SLOT);
                 printInfo(`AIPlayer: "${this.username}" equipped cape: ${cape}`);
             }
-            
-            if (Math.random() < 0.5) { // 50% chance to have an amulet
+
+            if (Math.random() < 0.5) {
+                // 50% chance to have an amulet
                 const amulet = amulets[Math.floor(Math.random() * amulets.length)];
                 this.invSet(WORN, amulet, 1, NECK_SLOT);
                 printInfo(`AIPlayer: "${this.username}" equipped amulet: ${amulet}`);
             }
-            
-            if (Math.random() < 0.8) { // 80% chance to have a weapon
+
+            if (Math.random() < 0.8) {
+                // 80% chance to have a weapon
                 const weapon = weapons[Math.floor(Math.random() * weapons.length)];
                 this.invSet(WORN, weapon, 1, WEAPON_SLOT);
                 printInfo(`AIPlayer: "${this.username}" equipped weapon: ${weapon}`);
             }
-            
-            if (Math.random() < 0.75) { // 75% chance to have body armor
+
+            if (Math.random() < 0.75) {
+                // 75% chance to have body armor
                 // Choose between chainbody and platebody
-                const bodyArmor = Math.random() < 0.6 ? 
-                    platebodies[Math.floor(Math.random() * platebodies.length)] : 
-                    chainbodies[Math.floor(Math.random() * chainbodies.length)];
+                const bodyArmor = Math.random() < 0.6 ? platebodies[Math.floor(Math.random() * platebodies.length)] : chainbodies[Math.floor(Math.random() * chainbodies.length)];
                 this.invSet(WORN, bodyArmor, 1, BODY_SLOT);
                 printInfo(`AIPlayer: "${this.username}" equipped body armor: ${bodyArmor}`);
             }
-            
-            if (Math.random() < 0.6) { // 60% chance to have a shield
+
+            if (Math.random() < 0.6) {
+                // 60% chance to have a shield
                 const shield = shields[Math.floor(Math.random() * shields.length)];
                 this.invSet(WORN, shield, 1, SHIELD_SLOT);
                 printInfo(`AIPlayer: "${this.username}" equipped shield: ${shield}`);
             }
-            
-            if (Math.random() < 0.7) { // 70% chance to have leg armor
+
+            if (Math.random() < 0.7) {
+                // 70% chance to have leg armor
                 // For females, choose between platelegs and plateskirt
                 let legArmor;
-                if (this.gender === 1 && Math.random() < 0.7) { // 70% chance for females to wear skirts
+                if (this.gender === 1 && Math.random() < 0.7) {
+                    // 70% chance for females to wear skirts
                     legArmor = plateskirts[Math.floor(Math.random() * plateskirts.length)];
                 } else {
                     legArmor = platelegs[Math.floor(Math.random() * platelegs.length)];
@@ -1321,15 +1318,14 @@ export default class MerchantPlayer2 extends PlayerClass {
                 this.invSet(WORN, legArmor, 1, LEGS_SLOT);
                 printInfo(`AIPlayer: "${this.username}" equipped leg armor: ${legArmor}`);
             }
-            
+
             // Update the player's appearance
             printInfo(`AIPlayer: "${this.username}" attempting to build appearance with equipment`);
             this.buildAppearance(WORN);
             printInfo(`AIPlayer: "${this.username}" appearance built with equipment`);
-            
+
             // Force refresh - run again to ensure it takes effect
             this.buildAppearance(WORN);
-            
         } catch (err) {
             printError(`AIPlayer: Error equipping items for "${this.username}": ${err}`);
         }
