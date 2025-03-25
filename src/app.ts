@@ -54,10 +54,12 @@ setTimeout(() => {
             'mage_pk_god', 'mining99', 'woodcut_king', 'rich_mercher', 'rune_4ever',
             'lvl_126', 'legend_cape', 'smithing_pro', 'mith_dragon', 'phat_owner',
             'cool_pker123', 'herblore_guy', 'xXshadowXx', 'pure_str_99', 'quest_cape',
-            'blue_phat', 'l33t_skills', 'combat_120', 'magic_lvl_90', 'noob_slayer'
+            'blue_phat', 'l33t_skills', 'combat_120', 'magic_lvl_90', 'noob_slayer',
+            'slayer_king', 'pure_ranger', 'str_pure42', 'divine_mage', 'dragon_hunter',
+            'fire_maker', 'fishing_pro', 'cooking_cape', 'herb_master', 'agility_99'
         ];
         
-        // Define all coordinates for merchants
+        // Define all coordinates for merchants in Varrock
         const merchantCoords = [
             [3183, 3431], [3181, 3444], [3185, 3443], [3179, 3430], [3183, 3443],
             [3184, 3436], [3183, 3428], [3176, 3434], [3185, 3446], [3181, 3443],
@@ -66,11 +68,29 @@ setTimeout(() => {
             [3182, 3443], [3181, 3444], [3181, 3446], [3185, 3438], [3184, 3436]
         ];
         
+        // Add additional Falador merchant coordinates
+        const faladorCoords = [
+            [3012, 3356], [3013, 3360], [3010, 3356], [3011, 3359], [3016, 3359],
+            [3013, 3356], [3018, 3356], [3010, 3358], [3013, 3355], [3011, 3355]
+        ];
+        
         // Spawn merchants at each coordinate with a unique player-like name
+        printInfo('Spawning merchants in Varrock...');
         for (let i = 0; i < merchantCoords.length; i++) {
             const [x, z] = merchantCoords[i];
             // Use names as-is without adding numbers to keep them looking like real players
             const name = merchantNames[i % merchantNames.length];
+            MerchantPlayer2.spawnMerchant(name, x, z);
+            printInfo(`Spawned merchant "${name}" at (${x}, ${z})`);
+        }
+        
+        // Spawn merchants in Falador
+        printInfo('Spawning merchants in Falador...');
+        for (let i = 0; i < faladorCoords.length; i++) {
+            const [x, z] = faladorCoords[i];
+            // Use different set of names for Falador merchants by offsetting in the array
+            const nameIndex = (i + merchantCoords.length) % merchantNames.length;
+            const name = merchantNames[nameIndex];
             MerchantPlayer2.spawnMerchant(name, x, z);
             printInfo(`Spawned merchant "${name}" at (${x}, ${z})`);
         }
