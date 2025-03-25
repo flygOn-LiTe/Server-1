@@ -9,8 +9,24 @@ import ServerTriggerType from '#/engine/script/ServerTriggerType.js';
 import IfSetText from '#/network/server/model/IfSetText.js';
 import { PlayerTimerType } from '#/engine/entity/EntityTimer.js';
 import ScriptRunner from '#/engine/script/ScriptRunner.js';
+// Import Player directly for type use
+import type Player from '#/engine/entity/Player.js';
 
-export default class MerchantPlayer extends PlayerClass {
+/**
+ * Interface defining a catalog item for merchants to sell
+ */
+interface MerchantItem {
+    /** Item ID */
+    id: number;
+    /** Item quantity */
+    count: number;
+    /** Price in gold coins (item ID 995) */
+    price: number;
+    /** The name of the item for chat messages */
+    name: string;
+}
+
+export default class MerchantPlayer2 extends PlayerClass {
     /** Whether this AI player is active in the world */
     public active: boolean = false;
 
@@ -25,6 +41,14 @@ export default class MerchantPlayer extends PlayerClass {
     private _tradePartnerUid: number | null = null;
     private _tradeItems: { id: number; count: number }[] = [];
     private _itemsOffered: boolean = false;
+
+    /** Merchant inventory */
+    private _merchantInventory: MerchantItem[] = [];
+    /** Currently selected item to sell */
+    private _currentSellingItem: MerchantItem | null = null;
+    /** Message interval for sale announcements */
+    private _saleAnnouncementInterval: ReturnType<typeof setInterval> | null = null;
+
     /**
      * Create a new AI player at the specified coordinates
      * @param username The username for this AI player
@@ -32,10 +56,10 @@ export default class MerchantPlayer extends PlayerClass {
      * @param z The z coordinate to spawn the AI at
      * @param level The level to spawn the AI at (default: 0 for ground level)
      */
-    constructor(username: string, x: number = 3222, z: number = 3218, level: number = 0) {
+    constructor(username: string, x: number, z: number, level: number = 0) {
         // Calculate proper username hashes using static methods
-        const username37 = MerchantPlayer.calculateUsername37(username);
-        const hash64 = MerchantPlayer.calculateHash64(username);
+        const username37 = MerchantPlayer2.calculateUsername37(username);
+        const hash64 = MerchantPlayer2.calculateHash64(username);
 
         // Call Player constructor with proper parameters
         super(username, username37, hash64);
@@ -142,9 +166,12 @@ export default class MerchantPlayer extends PlayerClass {
         this.lastStepZ = this.z;
 
         printInfo(`AIPlayer: Player "${username}" created successfully with gender ${this.gender === 0 ? 'male' : 'female'} and combat level ${this.combatLevel}`);
-        
+
         // Equip random items to customize appearance
         this.equipRandomItems();
+
+        // Initialize default merchant inventory
+        this.initializeDefaultInventory();
     }
 
     /**
@@ -182,10 +209,147 @@ export default class MerchantPlayer extends PlayerClass {
 
         return hash;
     }
+
+    /**
+     * Initialize default items for merchant to sell
+     */
+    private initializeDefaultInventory(): void {
+        this._merchantInventory = [
+            // Tools and equipment
+            { id: 1265, count: 1, price: 150, name: 'Bronze pickaxe' },
+            { id: 1351, count: 1, price: 100, name: 'Bronze axe' },
+            { id: 303, count: 1, price: 80, name: 'Small fishing net' },
+            { id: 590, count: 1, price: 50, name: 'Tinderbox' },
+            { id: 1059, count: 1, price: 200, name: 'Leather gloves' },
+            { id: 115, count: 1, price: 1000, name: 'Strength potion' },
+            { id: 225, count: 1, price: 700, name: 'Limpwurt root' },
+            
+            // Weapons
+            { id: 1277, count: 1, price: 200, name: 'Bronze sword' },
+            { id: 1291, count: 1, price: 250, name: 'Bronze longsword' },
+            { id: 1321, count: 1, price: 400, name: 'Bronze scimitar' },
+            { id: 841, count: 1, price: 350, name: 'Shortbow' },
+            { id: 882, count: 100, price: 300, name: 'Bronze arrows' },
+            
+            // Adamant weapons
+            { id: 1287, count: 1, price: 2800, name: 'Adamant sword' },
+            { id: 1301, count: 1, price: 3400, name: 'Adamant longsword' },
+            { id: 1331, count: 1, price: 3800, name: 'Adamant scimitar' },
+            { id: 1345, count: 1, price: 3200, name: 'Adamant warhammer' },
+            { id: 1357, count: 1, price: 3000, name: 'Adamant axe' },
+            { id: 1371, count: 1, price: 4200, name: 'Adamant battleaxe' },
+            { id: 1430, count: 1, price: 3700, name: 'Adamant mace' },
+            { id: 845, count: 1, price: 2900, name: 'Adamant dagger' },
+            { id: 890, count: 100, price: 1200, name: 'Adamant arrows' },
+            
+            // Rune weapons
+            { id: 1289, count: 1, price: 20000, name: 'Rune sword' },
+            { id: 1303, count: 1, price: 25000, name: 'Rune longsword' },
+            { id: 1333, count: 1, price: 30000, name: 'Rune scimitar' },
+            { id: 1347, count: 1, price: 24000, name: 'Rune warhammer' },
+            { id: 1359, count: 1, price: 22000, name: 'Rune axe' },
+            { id: 1373, count: 1, price: 28000, name: 'Rune battleaxe' },
+            { id: 1432, count: 1, price: 26000, name: 'Rune mace' },
+            { id: 892, count: 100, price: 4500, name: 'Rune arrows' },
+            
+            // Armor
+            { id: 1117, count: 1, price: 800, name: 'Bronze platebody' },
+            { id: 1075, count: 1, price: 700, name: 'Bronze platelegs' },
+            { id: 1155, count: 1, price: 400, name: 'Bronze full helm' },
+            { id: 1173, count: 1, price: 300, name: 'Bronze sq shield' },
+            { id: 1139, count: 1, price: 600, name: 'Bronze chainbody' },
+            
+            // Adamant armor
+            { id: 1123, count: 1, price: 8000, name: 'Adamant platebody' },
+            { id: 1073, count: 1, price: 6000, name: 'Adamant platelegs' },
+            { id: 1161, count: 1, price: 4000, name: 'Adamant full helm' },
+            { id: 1183, count: 1, price: 3600, name: 'Adamant sq shield' },
+            { id: 1145, count: 1, price: 5000, name: 'Adamant chainbody' },
+            { id: 1199, count: 1, price: 8200, name: 'Adamant kiteshield' },
+            { id: 1091, count: 1, price: 6400, name: 'Adamant plateskirt' },
+            
+            // Rune armor
+            { id: 1127, count: 1, price: 65000, name: 'Rune platebody' },
+            { id: 1079, count: 1, price: 48000, name: 'Rune platelegs' },
+            { id: 1163, count: 1, price: 32000, name: 'Rune full helm' },
+            { id: 1185, count: 1, price: 28000, name: 'Rune sq shield' },
+            { id: 1147, count: 1, price: 42000, name: 'Rune chainbody' },
+            { id: 1201, count: 1, price: 70000, name: 'Rune kiteshield' },
+            { id: 1093, count: 1, price: 46000, name: 'Rune plateskirt' },
+            
+            // Consumables and supplies
+            { id: 315, count: 10, price: 120, name: 'Shrimps' },
+            { id: 1925, count: 1, price: 30, name: 'Bucket' },
+            { id: 1931, count: 1, price: 20, name: 'Pot' },
+            { id: 229, count: 5, price: 100, name: 'Vials' },
+            { id: 233, count: 1, price: 1200, name: 'Pestle and mortar' },
+            
+            // Potions and ingredients
+            { id: 121, count: 1, price: 1000, name: 'Attack potion' },
+            { id: 175, count: 1, price: 1100, name: 'Antipoison' },
+            { id: 199, count: 1, price: 900, name: 'Prayer potion' },
+            { id: 145, count: 1, price: 1300, name: 'Super attack' },
+            { id: 157, count: 1, price: 1300, name: 'Super strength' },
+            
+            // Crafting/Magic supplies
+            { id: 1755, count: 1, price: 500, name: 'Chisel' },
+            { id: 1734, count: 1, price: 800, name: 'Thread' },
+            { id: 1592, count: 1, price: 30, name: 'Ring mould' },
+            { id: 556, count: 100, price: 400, name: 'Air runes' },
+            { id: 555, count: 100, price: 400, name: 'Water runes' },
+            { id: 557, count: 100, price: 400, name: 'Earth runes' },
+            { id: 554, count: 100, price: 400, name: 'Fire runes' },
+            
+            // Mining/Smithing supplies
+            { id: 440, count: 10, price: 300, name: 'Iron ore' },
+            { id: 453, count: 10, price: 200, name: 'Coal' },
+            { id: 2347, count: 1, price: 1000, name: 'Hammer' },
+            
+            // Farming/Herblore
+            { id: 5341, count: 1, price: 600, name: 'Rake' },
+            { id: 5343, count: 1, price: 900, name: 'Seed dibber' },
+            { id: 5329, count: 1, price: 1500, name: 'Gardening trowel' },
+            { id: 6055, count: 10, price: 800, name: 'Barley seeds' },
+            
+            // Miscellaneous
+            { id: 1059, count: 1, price: 200, name: 'Leather gloves' },
+            { id: 1635, count: 1, price: 500, name: 'Gold ring' },
+            { id: 1731, count: 1, price: 1200, name: 'Amulet of power' },
+            { id: 952, count: 1, price: 300, name: 'Spade' }
+        ];
+        
+        // Select a random item to sell initially
+        this.selectRandomItemToSell();
+    }
+
+    /**
+     * Set the merchant's inventory
+     */
+    public setMerchantInventory(items: MerchantItem[]): void {
+        this._merchantInventory = [...items];
+        printInfo(`AIPlayer: "${this.username}" merchant inventory set with ${items.length} items`);
+        // Re-select a random item after changing inventory
+        this.selectRandomItemToSell();
+    }
+
+    /**
+     * Randomly select an item from inventory to sell
+     */
+    private selectRandomItemToSell(): void {
+        if (this._merchantInventory.length > 0) {
+            const randomIndex = Math.floor(Math.random() * this._merchantInventory.length);
+            this._currentSellingItem = this._merchantInventory[randomIndex];
+            printInfo(`AIPlayer: "${this.username}" selected to sell: ${this._currentSellingItem.name} for ${this._currentSellingItem.price} gold`);
+        } else {
+            this._currentSellingItem = null;
+            printInfo(`AIPlayer: "${this.username}" has no items to sell`);
+        }
+    }
+
     /**
      * Activates this AI player and adds it to the world
      */
-    public activate(): boolean {
+    public activate(x: number, z: number): boolean {
         try {
             printInfo(`AIPlayer: Activating "${this.username}"`);
 
@@ -205,9 +369,9 @@ export default class MerchantPlayer extends PlayerClass {
                 this.active = true;
 
                 // Teleport to the desired location
-                this.teleport(3182, 3438, 0);
-                printInfo(`AIPlayer: "${this.username}" teleported to (3182, 3438, 0)`);
-                
+                this.teleport(x, z, 0);
+                printInfo(`AIPlayer: "${this.username}" teleported to (${this.spawnX}, ${this.spawnZ}, ${this.level})`);
+
                 // Force refresh equipment appearance now that the player is in the world
                 const WORN = 103;
                 printInfo(`AIPlayer: "${this.username}" enforcing appearance update after activation`);
@@ -216,9 +380,8 @@ export default class MerchantPlayer extends PlayerClass {
                 // Start the heartbeat to prevent timeout
                 this.startHeartbeat();
 
-                setInterval(() => {
-                    this.say('Free Junk!');
-                }, 5000);
+                // Start sale announcements
+                this.startSaleAnnouncements();
 
                 return true;
             }
@@ -228,6 +391,57 @@ export default class MerchantPlayer extends PlayerClass {
             printError(`AIPlayer: Error activating "${this.username}": ${err}`);
             return false;
         }
+    }
+
+    /**
+     * Start periodic sale announcements
+     */
+    private startSaleAnnouncements(): void {
+        // Clear any existing announcement interval
+        if (this._saleAnnouncementInterval) {
+            clearInterval(this._saleAnnouncementInterval);
+        }
+
+        // Calculate a random initial delay (between 1-5 seconds) 
+        // This staggers the start time so merchants don't all announce simultaneously
+        const initialDelay = Math.floor(Math.random() * 5000) + 1000;
+        
+        // Calculate a random interval (between 8-15 seconds)
+        // This varies the frequency of announcements for each merchant
+        const announcementInterval = Math.floor(Math.random() * 7000) + 8000;
+        
+        // Log the timing configuration
+        printInfo(`AIPlayer: "${this.username}" will start announcing in ${initialDelay}ms with interval of ${announcementInterval}ms`);
+
+        // Start with the initial delay
+        setTimeout(() => {
+            // Show first announcement immediately after initial delay
+            if (this._currentSellingItem) {
+                this.say(`Selling ${this._currentSellingItem.name} for ${this._currentSellingItem.price} gold!`);
+            } else {
+                this.say('Nothing to sell right now!');
+            }
+            
+            // Then start the interval for subsequent announcements
+            this._saleAnnouncementInterval = setInterval(() => {
+                // Add variation to announcements
+                const messages = [
+                    `Selling ${this._currentSellingItem?.name} for only ${this._currentSellingItem?.price} gold!`,
+                    `Get your ${this._currentSellingItem?.name} here! Just ${this._currentSellingItem?.price} gold!`,
+                    `Best prices on ${this._currentSellingItem?.name}! ${this._currentSellingItem?.price} gold!`,
+                    `Quality ${this._currentSellingItem?.name} for sale! ${this._currentSellingItem?.price} gold!`,
+                    `Looking for ${this._currentSellingItem?.name}? Only ${this._currentSellingItem?.price} gold!`
+                ];
+                
+                if (this._currentSellingItem) {
+                    // Choose a random message from the list
+                    const messageIndex = Math.floor(Math.random() * messages.length);
+                    this.say(messages[messageIndex]);
+                } else {
+                    this.say('Nothing to sell right now!');
+                }
+            }, announcementInterval);
+        }, initialDelay);
     }
 
     /**
@@ -268,6 +482,12 @@ export default class MerchantPlayer extends PlayerClass {
                 printInfo(`AIPlayer: Player "${this.username}" removed from World.players list`);
             } catch (e) {
                 printError(`AIPlayer: Error removing "${this.username}" from World.players: ${e}`);
+            }
+
+            // Clear the sale announcement interval
+            if (this._saleAnnouncementInterval) {
+                clearInterval(this._saleAnnouncementInterval);
+                this._saleAnnouncementInterval = null;
             }
 
             printInfo(`AIPlayer: Player "${this.username}" deactivated successfully`);
@@ -317,28 +537,11 @@ export default class MerchantPlayer extends PlayerClass {
     /**
      * Creates and spawns an AI player in Lumbridge
      */
-    public static spawn(username: string, x: number, z: number): MerchantPlayer {
+    public static spawn(username: string, x: number, z: number): MerchantPlayer2 {
         printInfo(`AIPlayer: Creating player "${username}" in Lumbridge at (${x}, ${z})`);
-        
-        // Create the merchant instance
-        const player = new MerchantPlayer(username, x, z, 0);
-        
-        // Ensure equipment is fully set up before activation
-        printInfo(`AIPlayer: Ensuring equipment is set up for "${username}"`);
-        const WORN = 103;
-        player.buildAppearance(WORN);
-        
-        // Activate the player in the world
-        player.activate();
-        
-        // Final appearance refresh after activation
-        setTimeout(() => {
-            if (player.active) {
-                printInfo(`AIPlayer: Final appearance refresh for "${username}" after spawn`);
-                player.buildAppearance(WORN);
-            }
-        }, 500);
-        
+        const player = new MerchantPlayer2(username, x, z, 0);
+        player.activate(x, z);
+
         return player;
     }
     /**
@@ -467,6 +670,13 @@ export default class MerchantPlayer extends PlayerClass {
             clearInterval(this.keepaliveInterval);
             this.keepaliveInterval = null;
         }
+
+        // Clear the sale announcement interval
+        if (this._saleAnnouncementInterval) {
+            clearInterval(this._saleAnnouncementInterval);
+            this._saleAnnouncementInterval = null;
+        }
+        
         // Call the parent cleanup method
         super.cleanup();
     }
@@ -518,10 +728,6 @@ export default class MerchantPlayer extends PlayerClass {
      */
 
     /**
-     * Equips this AI player with tradeable items for trade demonstration
-     * @param _itemIds Array of item IDs to add to inventory
-     */
-    /**
      * Set items that this AI player will offer in trades
      * @param items Array of items with id and count
      */
@@ -529,31 +735,37 @@ export default class MerchantPlayer extends PlayerClass {
         this._tradeItems = [...items];
         printInfo(`AIPlayer: "${this.username}" trade items set to ${JSON.stringify(this._tradeItems)}`);
     }
+
+    /**
+     * Equips this AI player with tradeable items for trade demonstration
+     * @param _itemIds Array of item IDs to add to inventory
+     */
     public async addTradeableItems(_itemIds: number[] = []): Promise<void> {
         try {
-            // Use specific items 303 and 1265 regardless of what was passed in
-            const specificItems = [303, 1265];
-
-            printInfo(`AIPlayer: "${this.username}" adding specific tradeable items to inventory (303 and 1265)`);
-
-            // Add each item to inventory (just one of each)
-            for (const itemId of specificItems) {
-                // Always add exactly 1 of each item
-                this.invAdd(93, itemId, 1);
-                printInfo(`AIPlayer: "${this.username}" added 1x item ${itemId} to inventory`);
+            // First, clear inventory to ensure we don't have old items
+            // This is a simplified approach - a real implementation would handle inventory properly
+            const INVENTORY_SLOT_COUNT = 28;
+            for (let i = 0; i < INVENTORY_SLOT_COUNT; i++) {
+                const item = this.invGetSlot(93, i);
+                if (item && item.id) {
+                    this.invDelSlot(93, i);
+                }
             }
 
-            // Configure these specific items to be offered in trades
-            const tradeItems = [
-                { id: 303, count: 1 },
-                { id: 1265, count: 1 }
-            ];
-
-            // Set the trade items configuration
-            this.setTradeItems(tradeItems);
+            // Add the current selling item to inventory
+            if (this._currentSellingItem) {
+                this.invAdd(93, this._currentSellingItem.id, this._currentSellingItem.count);
+                printInfo(`AIPlayer: "${this.username}" added ${this._currentSellingItem.count}x item ${this._currentSellingItem.id} (${this._currentSellingItem.name}) to inventory`);
+            
+                // Configure the current item to be offered in trades
+                this.setTradeItems([
+                    { id: this._currentSellingItem.id, count: this._currentSellingItem.count }
+                ]);
+            } else {
+                printInfo(`AIPlayer: "${this.username}" has no item selected to sell`);
+            }
 
             // List inventory after adding items
-            const INVENTORY_SLOT_COUNT = 28;
             printInfo(`AIPlayer: "${this.username}" inventory after adding items:`);
             for (let i = 0; i < INVENTORY_SLOT_COUNT; i++) {
                 const item = this.invGetSlot(93, i);
@@ -732,18 +944,107 @@ export default class MerchantPlayer extends PlayerClass {
                 this._tradePartnerUid = null;
                 return;
             }
+            
+            // Reset state for new trade
             this._itemsOffered = false;
+            
+            // Add the currently selected item to inventory and prepare for trade
             await this.addTradeableItems();
-            // Set partner as target and use the proper opcode (OPPLAYER4 = trade) This is what actually opens the trade
+            
+            // Set partner as target and use the proper opcode (OPPLAYER4 = trade) 
+            // This is what actually opens the trade
             this.target = partner;
             this.targetOp = ServerTriggerType.OPPLAYER4;
-            //instead of delay here, find a way to check if trade window is open.
+            
+            // Wait for trade window to open
             await this.delay(1500);
+            
+            // Offer the items for trade
             await this.offerTradeItems();
             await this.delay(500);
-            await this.acceptFirstScreen(partner);
-            await this.waitForTradeAcceptance();
-            await this.acceptTradeConfirmation();
+            
+            // Check if we have an item to sell
+            if (!this._currentSellingItem) {
+                partner.messageGame('Sorry, I have nothing to sell right now!');
+                return;
+            }
+            
+            // Define required gold amount
+            const requiredOffer = [
+                { id: 995, count: this._currentSellingItem.price }
+            ];
+
+            // Inform player about the price
+            partner.messageGame(`I'm selling ${this._currentSellingItem.name} for ${this._currentSellingItem.price} gold.`);
+
+            // Start continuous trade monitoring
+            let tradeAccepted = false;
+            let tradeFinished = false;
+            let monitorInterval: ReturnType<typeof setInterval> | null = null;
+            
+            // Create a monitoring interval that continuously checks the trade state
+            monitorInterval = setInterval(async () => {
+                try {
+                    // Exit if trade is already finished or partner is no longer valid
+                    if (tradeFinished || !this._tradePartnerUid) {
+                        if (monitorInterval) {
+                            clearInterval(monitorInterval);
+                            monitorInterval = null;
+                        }
+                        return;
+                    }
+                    
+                    // Get current trade status and check the offer
+                    const tradeStatus = this.getVar(258);
+                    const currentOffer = this.getTradeOffer(partner);
+                    const isValid = this.isTradeOfferValid(currentOffer, requiredOffer);
+                    
+                    // If the player has added the correct gold and we haven't accepted yet,
+                    // or if we accepted before but they changed their offer and now it's valid again
+                    if (isValid && (!tradeAccepted || tradeStatus === 0)) {
+                        tradeAccepted = true;
+                        await this.acceptFirstScreen(partner);
+                        if (this._currentSellingItem) {
+                            partner.messageGame("That's the right amount! I've accepted the trade.");
+                        }
+                    }
+                    // If we previously accepted but now the offer is no longer valid (gold was removed)
+                    else if (!isValid && tradeAccepted) {
+                        tradeAccepted = false;
+                        this.setVar(258, 0); // Unaccept the trade
+                        if (this._currentSellingItem) {
+                            partner.messageGame(`I need ${this._currentSellingItem.price} gold coins for my ${this._currentSellingItem.name}.`);
+                        }
+                    }
+                    
+                    // If we've moved to the confirmation screen
+                    if (tradeStatus === 2) {
+                        await this.acceptTradeConfirmation();
+                        tradeFinished = true;
+                        if (monitorInterval) {
+                            clearInterval(monitorInterval);
+                            monitorInterval = null;
+                        }
+                    }
+                } catch (err) {
+                    printError(`[TRADE] AI "${this.username}" - Error in trade monitor: ${err}`);
+                }
+            }, 500); // Check every 500ms
+            
+            // Set a safety timeout to prevent the interval from running forever
+            setTimeout(() => {
+                if (monitorInterval) {
+                    clearInterval(monitorInterval);
+                    monitorInterval = null;
+                    this.handleTradeClose();
+                    printInfo(`[TRADE] AI "${this.username}" - Trade timed out after 2 minutes`);
+                }
+            }, 120000); // 2 minute timeout
+            
+            // After successful trade, potentially choose a new item to sell
+            if (Math.random() < 0.3) { // 30% chance to switch items after a trade
+                this.selectRandomItemToSell();
+            }
         } catch (err) {
             printError(`AIPlayer: Error accepting trade for "${this.username}": ${err}`);
         }
@@ -799,6 +1100,91 @@ export default class MerchantPlayer extends PlayerClass {
         });
     }
 
+    private getTradeOffer(player: Player): { id: number; count: number }[] {
+        const offer: { id: number; count: number }[] = [];
+        const INVENTORY_SLOT_COUNT = 28;
+        for (let i = 0; i < INVENTORY_SLOT_COUNT; i++) {
+            const item = player.invGetSlot(90, i);
+            if (item && item.id) {
+                offer.push({ id: item.id, count: item.count });
+                // Log each slot that contains an item in the trade window
+                printInfo(`[TRADE] AI "${this.username}" - Slot ${i}: Item ID ${item.id} x${item.count}`);
+            }
+        }
+        if (offer.length === 0) {
+            printInfo(`[TRADE] AI "${this.username}" - No items currently offered by ${player.username}.`);
+        } else {
+            // Log a summary of the current offer
+            const summary = offer.map(item => `ItemID ${item.id} x${item.count}`).join(', ');
+            printInfo(`[TRADE] AI "${this.username}" - Total Offer: ${summary}`);
+        }
+        return offer;
+    }
+
+    private isTradeOfferValid(tradeOffer: { id: number; count: number }[], requiredOffer: { id: number; count: number }[]): boolean {
+        for (const reqItem of requiredOffer) {
+            const offeredItem = tradeOffer.find(item => item.id === reqItem.id);
+            if (!offeredItem || offeredItem.count < reqItem.count) {
+                printInfo(`[TRADE] AI "${this.username}" - Required item ID ${reqItem.id} x${reqItem.count} is missing or insufficient (found ${offeredItem ? offeredItem.count : 0}).`);
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private async waitForValidTradeOffer(
+        partner: Player,
+        requiredOffer: { id: number; count: number }[],
+        timeout: number = 60000, // timeout in ms (extended to 1 minute)
+        checkInterval: number = 500 // check every 500ms
+    ): Promise<boolean> {
+        const startTime = Date.now();
+        // Log the required offer once
+        const reqSummary = requiredOffer.map(item => `ItemID ${item.id} x${item.count}`).join(', ');
+        printInfo(`[TRADE] AI "${this.username}" - Waiting for trade offer to meet required: ${reqSummary}`);
+
+        // If we have a current selling item, tell the player what we want
+        if (this._currentSellingItem) {
+            partner.messageGame(`Please offer ${this._currentSellingItem.price} gold coins for my ${this._currentSellingItem.name}.`);
+        }
+
+        while (Date.now() - startTime < timeout) {
+            const tradeOffer = this.getTradeOffer(partner);
+            
+            // Only log every few seconds to avoid spamming
+            if ((Date.now() - startTime) % 3000 < checkInterval) {
+                printInfo(`[TRADE] AI "${this.username}" - Checking trade offer: ${JSON.stringify(tradeOffer)}`);
+            }
+            
+            if (this.isTradeOfferValid(tradeOffer, requiredOffer)) {
+                printInfo(`[TRADE] AI "${this.username}" - Trade offer is valid.`);
+                partner.messageGame("That's the right amount! Let's trade.");
+                return true;
+            }
+            
+            // Wait a bit before checking again
+            await this.delay(checkInterval);
+        }
+        
+        printInfo(`[TRADE] AI "${this.username}" - Trade offer did not meet the requirements within ${timeout}ms.`);
+        return false;
+    }
+    /**
+     * Handle trade closing from server or other player
+     */
+    public handleTradeClose(): void {
+        try {
+            printInfo(`[TRADE] AI "${this.username}" - CLOSE: Trade has ended or was closed`);
+
+            // Clear trade partner and reset stage
+            this._tradePartnerUid = null;
+
+            // Reset trade status var
+            this.setVar(258, 0);
+        } catch (err) {
+            printError(`[TRADE] AI "${this.username}" - ERROR: Error handling trade close: ${err}`);
+        }
+    }
     /**
      * Override processTimers to filter out the general_macro_events timer
      * This prevents AI players from experiencing random macro events
@@ -823,6 +1209,34 @@ export default class MerchantPlayer extends PlayerClass {
                 this.executeScript(script, timer.type === PlayerTimerType.NORMAL);
             }
         }
+    }
+
+    /**
+     * Creates and spawns an AI merchant player at specified coordinates
+     */
+    public static spawnMerchant(username: string, x: number, z: number): MerchantPlayer2 {
+        printInfo(`AIPlayer: Creating merchant "${username}" at (${x}, ${z})`);
+        
+        // Create the merchant instance
+        const merchant = new MerchantPlayer2(username, x, z, 0);
+        
+        // Ensure equipment is fully set up before activation
+        printInfo(`AIPlayer: Ensuring equipment is set up for "${username}"`);
+        const WORN = 103;
+        merchant.buildAppearance(WORN);
+        
+        // Activate the merchant in the world
+        merchant.activate(x, z);
+        
+        // Final appearance refresh after activation
+        setTimeout(() => {
+            if (merchant.active) {
+                printInfo(`AIPlayer: Final appearance refresh for "${username}" after spawn`);
+                merchant.buildAppearance(WORN);
+            }
+        }, 500);
+        
+        return merchant;
     }
 
     /**
@@ -908,9 +1322,13 @@ export default class MerchantPlayer extends PlayerClass {
                 printInfo(`AIPlayer: "${this.username}" equipped leg armor: ${legArmor}`);
             }
             
-            // Build the player's appearance with the equipment
+            // Update the player's appearance
+            printInfo(`AIPlayer: "${this.username}" attempting to build appearance with equipment`);
             this.buildAppearance(WORN);
             printInfo(`AIPlayer: "${this.username}" appearance built with equipment`);
+            
+            // Force refresh - run again to ensure it takes effect
+            this.buildAppearance(WORN);
             
         } catch (err) {
             printError(`AIPlayer: Error equipping items for "${this.username}": ${err}`);
