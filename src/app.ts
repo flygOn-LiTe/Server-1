@@ -16,6 +16,8 @@ import { populateHiscores } from '#tools/server/populate_hiscores.js';
 
 // Import MerchantPlayer2 after all the "#" imports
 import MerchantPlayer2 from './engine/entity/ai/MerchantPlayer2.js';
+// Import MerchantPlayer3 for buyers
+import MerchantPlayer3 from './engine/entity/ai/MerchantPlayer3.js';
 
 if (Environment.BUILD_STARTUP_UPDATE) {
     await updateCompiler();
@@ -59,6 +61,16 @@ setTimeout(() => {
             'fire_maker', 'fishing_pro', 'cooking_cape', 'herb_master', 'agility_99'
         ];
         
+        // Create buyer (MerchantPlayer3) usernames
+        const buyerNames = [
+            'item_buyer', 'ore_dealer', 'rune_buyer', 'resource_man', 'trader_joe',
+            'gold_4_stuff', 'bank_maker', 'cash_4_items', 'top_prices', 'need_goods',
+            'material_guy', 'skiller_needs', 'merch_buyer', 'supply_agent', 'bargain_hunt',
+            'resource_king', 'wealth_trader', 'grand_buyer', 'log_collector', 'herb_buyer',
+            'quick_cash', 'easy_money', 'ruby_dealer', 'diamond_man', 'sapphire_pro',
+            'emerald_guy', 'bulk_trader', 'collector99', 'rare_buyer', 'phat_hunter'
+        ];
+        
         // Define all coordinates for merchants in Varrock
         const merchantCoords = [
             [3183, 3431], [3181, 3444], [3185, 3443], [3179, 3430], [3183, 3443],
@@ -74,6 +86,20 @@ setTimeout(() => {
             [3013, 3356], [3018, 3356], [3010, 3358], [3013, 3355], [3011, 3355]
         ];
         
+        // Define Varrock buyer coordinates (spread near merchantCoords but not on top)
+        const varrockBuyerCoords = [
+            [3187, 3429], [3189, 3435], [3190, 3440], [3174, 3431], [3177, 3437],
+            [3174, 3440], [3175, 3444], [3188, 3445], [3180, 3449], [3183, 3450],
+            [3192, 3441], [3186, 3439], [3179, 3443], [3175, 3429], [3187, 3425]
+        ];
+        
+        // Define Falador buyer coordinates (spread near faladorCoords but not on top)
+        const faladorBuyerCoords = [
+            [3018, 3352], [3014, 3352], [3008, 3354], [3006, 3358], [3007, 3362],
+            [3010, 3362], [3016, 3362], [3020, 3360], [3022, 3356], [3019, 3353],
+            [3011, 3350], [3008, 3351], [3006, 3356], [3017, 3365], [3022, 3362]
+        ];
+        
         // Spawn merchants at each coordinate with a unique player-like name
         printInfo('Spawning merchants in Varrock...');
         for (let i = 0; i < merchantCoords.length; i++) {
@@ -81,7 +107,7 @@ setTimeout(() => {
             // Use names as-is without adding numbers to keep them looking like real players
             const name = merchantNames[i % merchantNames.length];
             MerchantPlayer2.spawnMerchant(name, x, z);
-            printInfo(`Spawned merchant "${name}" at (${x}, ${z})`);
+            printInfo(`Spawned merchant '${name}' at (${x}, ${z})`);
         }
         
         // Spawn merchants in Falador
@@ -92,7 +118,26 @@ setTimeout(() => {
             const nameIndex = (i + merchantCoords.length) % merchantNames.length;
             const name = merchantNames[nameIndex];
             MerchantPlayer2.spawnMerchant(name, x, z);
-            printInfo(`Spawned merchant "${name}" at (${x}, ${z})`);
+            printInfo(`Spawned merchant '${name}' at (${x}, ${z})`);
+        }
+        
+        // Spawn buyers in Varrock
+        printInfo('Spawning buyers in Varrock...');
+        for (let i = 0; i < varrockBuyerCoords.length; i++) {
+            const [x, z] = varrockBuyerCoords[i];
+            const name = buyerNames[i % buyerNames.length];
+            MerchantPlayer3.spawnBuyer(name, x, z);
+            printInfo(`Spawned buyer '${name}' at (${x}, ${z})`);
+        }
+        
+        // Spawn buyers in Falador
+        printInfo('Spawning buyers in Falador...');
+        for (let i = 0; i < faladorBuyerCoords.length; i++) {
+            const [x, z] = faladorBuyerCoords[i];
+            const nameIndex = (i + varrockBuyerCoords.length) % buyerNames.length;
+            const name = buyerNames[nameIndex];
+            MerchantPlayer3.spawnBuyer(name, x, z);
+            printInfo(`Spawned buyer '${name}' at (${x}, ${z})`);
         }
         
     } catch (err) {
