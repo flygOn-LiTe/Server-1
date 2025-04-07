@@ -677,13 +677,6 @@ export default class MerchantPlayer3 extends PlayerClass {
                             // Clear our gold offer
                             this.clearTradeOffer();
                             
-                            // Let them know we don't want anything
-                            if (this._currentBuyingItems.length > 0) {
-                                const item = this._currentBuyingItems[0];
-                                partner.messageGame(`I'm only interested in ${item.name}.`);
-                            } else {
-                                partner.messageGame('I\'m not interested in those items.');
-                            }
                         }
                     }
 
