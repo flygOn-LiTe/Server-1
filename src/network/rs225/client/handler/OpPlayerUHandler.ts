@@ -1,3 +1,5 @@
+import * as rsbuf from '@2004scape/rsbuf';
+
 import Component from '#/cache/config/Component.js';
 import ObjType from '#/cache/config/ObjType.js';
 import Interaction from '#/engine/entity/Interaction.js';
@@ -19,7 +21,7 @@ export default class OpPlayerUHandler extends MessageHandler<OpPlayerU> {
         }
 
         const com = Component.get(comId);
-        if (typeof com === 'undefined' || !player.isComponentVisible(com)) {
+        if (typeof com === 'undefined' || !player.isComponentVisible(com) || !com.interactable) {
             player.write(new UnsetMapFlag());
             player.clearPendingAction();
             return false;
@@ -46,7 +48,7 @@ export default class OpPlayerUHandler extends MessageHandler<OpPlayerU> {
             return false;
         }
 
-        if (!player.buildArea.players.has(other)) {
+        if (!rsbuf.hasPlayer(player.pid, other.pid)) {
             player.write(new UnsetMapFlag());
             player.clearPendingAction();
             return false;
@@ -59,6 +61,7 @@ export default class OpPlayerUHandler extends MessageHandler<OpPlayerU> {
             return false;
         }
 
+        player.lastUseItem = item;
         player.lastUseSlot = slot;
 
         player.setInteraction(Interaction.ENGINE, other, ServerTriggerType.APPLAYERU, item);

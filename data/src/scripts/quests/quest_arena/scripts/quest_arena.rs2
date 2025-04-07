@@ -130,8 +130,9 @@ if(coordx(coord) > coordx(loc_coord) | coordz(coord) < coordz(loc_coord)) {
             def_int $angle = loc_angle;
             def_locshape $shape = loc_shape;
             $x, $z = ~door_open($angle, loc_shape);
-            loc_change(loc_83, 2);
-            loc_add(movecoord($loc_coord, $x, 0, $z), loc_1532, modulo(add($angle, 1), 4), $shape, 2);
+            // Temp note: dur updated
+            loc_change(loc_83, 3);
+            loc_add(movecoord($loc_coord, $x, 0, $z), loc_1532, modulo(add($angle, 1), 4), $shape, 3);
             ~forcemove(movecoord(coord, 2, 0, -2));
     }
 }
@@ -149,8 +150,9 @@ if(loc_find(0_40_49_46_16, loc_82) = true) {
     def_int $angle = loc_angle;
     def_locshape $shape = loc_shape;
     $x, $z = ~door_open($angle, loc_shape);
-    loc_change(loc_83, 2);
-    loc_add(movecoord($loc_coord, $x, 0, $z), loc_1532, modulo(add($angle, 1), 4), $shape, 2);
+    // Temp note: dur updated
+    loc_change(loc_83, 3);
+    loc_add(movecoord($loc_coord, $x, 0, $z), loc_1532, modulo(add($angle, 1), 4), $shape, 3);
     sound_synth(door_open, 0, 0);
 }
 cam_moveto(0_40_49_43_26, 270, 1, 1);
@@ -180,8 +182,9 @@ def_coord $loc_coord = loc_coord;
 def_int $angle = loc_angle;
 def_locshape $shape = loc_shape;
 $x, $z = ~door_open($angle, loc_shape);
-loc_change(loc_83, 2);
-loc_add(movecoord($loc_coord, $x, 0, $z), loc_1532, modulo(add($angle, 1), 4), $shape, 2);
+// Temp note: dur updated
+loc_change(loc_83, 3);
+loc_add(movecoord($loc_coord, $x, 0, $z), loc_1532, modulo(add($angle, 1), 4), $shape, 3);
 ~forcemove(movecoord(coord, -2, 0, 2));
 if (%arena_progress = ^arena_defeated_ogre & npc_find(coord, general_khazard, 8, 0) = true) {
     @khazard_welldone;
@@ -194,10 +197,13 @@ def_coord $cam_coord = 0_40_49_39_23;
 if (npc_find(movecoord(coord, 0, 0, 8), khazard_scorpion, 14, 0) = true) {
     if(npc_getmode = none) { // npc in cutscene already, do nothing
         return;
-    } else if(~npc_out_of_combat = true & inzone(0_40_49_47_23, 0_40_49_49_24, npc_coord) = false) {
-        // out of combat and out of cage so attack player, otherwise we'll just set ptr and start cutscene
-        ~npc_retaliate(0);
-        return;
+    } else if(inzone(0_40_49_47_23, 0_40_49_49_24, npc_coord) = false) {
+        if(add(%npc_lastcombat, 8) > map_clock) {
+            // out of combat and out of cage so attack player, otherwise we'll just set ptr and start cutscene
+            ~npc_retaliate(0);
+            return;
+        }
+        npc_add(0_40_49_47_23, khazard_scorpion, 500);
     }
 } else {
     npc_add(0_40_49_47_23, khazard_scorpion, 500);
@@ -209,10 +215,11 @@ cam_moveto(0_40_49_41_23, 450, 4, 2);
 npc_walk(0_40_49_47_23);
 p_delay(2);
 if(loc_find(0_40_49_46_23, loc_78) = true & .loc_find(0_40_49_46_24, loc_77) = true) {
-    loc_del(5);
-    loc_add(movecoord(loc_coord, 1, 0, 0), loc_type, 3, loc_shape, 5);
-    .loc_del(5);
-    .loc_add(movecoord(.loc_coord, 1, 0, 0), .loc_type, 1, .loc_shape, 5);
+    // Temp note: dur updated
+    loc_del(6);
+    loc_add(movecoord(loc_coord, 1, 0, 0), loc_type, 3, loc_shape, 6);
+    .loc_del(6);
+    .loc_add(movecoord(.loc_coord, 1, 0, 0), .loc_type, 1, .loc_shape, 6);
 }
 npc_tele(movecoord(npc_coord, -1, 0, 0));
 ~npc_retaliate(0);
@@ -226,10 +233,13 @@ def_coord $cam_coord = 0_40_49_39_23;
 if (npc_find(movecoord(coord, 0, 0, 8), bouncer, 14, 0) = true) {
     if(npc_getmode = none) { // npc in cutscene already, do nothing
         return;
-    } else if(~npc_out_of_combat = true & inzone(0_40_49_47_26, 0_40_49_49_27, npc_coord) = false) {
-        // out of combat and out of cage so attack player, otherwise we'll just set ptr and start cutscene
-        ~npc_retaliate(0);
-        return;
+    } else if(inzone(0_40_49_47_26, 0_40_49_49_27, npc_coord) = false) {
+        if(add(%npc_lastcombat, 8) > map_clock) {
+            // out of combat and out of cage so attack player, otherwise we'll just set ptr and start cutscene
+            ~npc_retaliate(0);
+            return;
+        }
+        npc_add(0_40_49_47_26, bouncer, 500);
     }
 } else {
     npc_add(0_40_49_47_26, bouncer, 500);
@@ -241,10 +251,11 @@ cam_moveto(0_40_49_41_26, 450, 4, 2);
 npc_walk(0_40_49_47_26);
 p_delay(2);
 if(loc_find(0_40_49_46_26, loc_78) = true & .loc_find(0_40_49_46_27, loc_77) = true) {
-    loc_del(5);
-    loc_add(movecoord(loc_coord, 1, 0, 0), loc_type, 3, loc_shape, 5);
-    .loc_del(5);
-    .loc_add(movecoord(.loc_coord, 1, 0, 0), .loc_type, 1, .loc_shape, 5);
+    // Temp note: dur updated
+    loc_del(6);
+    loc_add(movecoord(loc_coord, 1, 0, 0), loc_type, 3, loc_shape, 6);
+    .loc_del(6);
+    .loc_add(movecoord(.loc_coord, 1, 0, 0), .loc_type, 1, .loc_shape, 6);
 }
 npc_tele(movecoord(npc_coord, -1, 0, 0));
 ~npc_retaliate(0);
