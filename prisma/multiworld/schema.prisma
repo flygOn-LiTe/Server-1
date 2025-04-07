@@ -39,7 +39,16 @@ model account {
     notes         String?   @db.Text
     notes_updated DateTime?
 
-    members Boolean @default(true)
+    members Boolean @default(false)
+
+    // Whether 2FA is enabled
+    tfa_enabled Boolean @default(false)
+    // To prevent replay attacks
+    tfa_last_code Int @default(0)
+    // Secret key for code generation
+    tfa_secret_base32 String?
+    // How many incorrect attempts have been made in a row
+    tfa_incorrect_attempts Int @default(0)
 }
 
 model session {
@@ -81,6 +90,20 @@ model account_session {
     coord      Int
     event      String
     event_type Int      @default(-1)
+}
+
+model tag {
+    id Int @id @default(autoincrement())
+
+    name String
+    color String?
+}
+
+model account_tag {
+    tag_id Int
+    account_id Int
+
+    @@id([account_id, tag_id])
 }
 
 // website
@@ -186,20 +209,6 @@ model input_report {
     session_uuid String
 }
 
-model input_report_event {
-    input_report_id Int
-    seq             Int
-
-    input_type Int  @default(-1)
-    delta      Int
-    coord      Int
-    mouse_x    Int?
-    mouse_y    Int?
-    key_code   Int?
-
-    @@id([input_report_id, seq])
-}
-
 model input_report_event_raw {
     input_report_id Int
     seq             Int
@@ -235,4 +244,25 @@ model message {
     sender    String @default("me")
     content   String @db.Text
     created   DateTime @default(now())
+}
+
+model message_status {
+  id Int @id @default(autoincrement())
+
+  thread_id  Int
+  account_id Int
+  read       DateTime?
+  deleted    DateTime?
+}
+
+model mod_action {
+    id Int @id @default(autoincrement())
+
+    account_id Int
+    target_id  Int?
+
+    action_id Int
+    data      String?
+    ip        String?
+    timestamp DateTime @default(now())
 }

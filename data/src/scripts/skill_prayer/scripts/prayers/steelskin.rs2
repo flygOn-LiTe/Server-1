@@ -13,7 +13,7 @@ if ($data = null) {
 }
 if (%prayer_steelskin = ^true) {
     %prayer_steelskin = ^false;
-    ~prayer_deactivate(^prayer_clarity);
+    ~prayer_deactivate(^prayer_steelskin);
     return;
 }
 if (~prayer_checks($data) = false) {
@@ -28,4 +28,4 @@ if (stat_base(prayer) < $levelreq){
     return;
 }
 %prayer_steelskin = ^true;
-~prayer_activate($data, ^prayer_steelskin_start);
+~prayer_activate($data);

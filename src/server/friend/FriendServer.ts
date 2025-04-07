@@ -1,17 +1,12 @@
-import fs from 'fs';
-import fsp from 'fs/promises';
-
 import { WebSocket, WebSocketServer } from 'ws';
 
 import { db, toDbDate } from '#/db/query.js';
-import { PlayerLoading } from '#/engine/entity/PlayerLoading.js';
-import Packet from '#/io/Packet.js';
 import { FriendServerRepository } from '#/server/friend/FriendServerRepository.js';
 import InternalClient from '#/server/InternalClient.js';
 import { ChatModePrivate } from '#/util/ChatModes.js';
 import Environment from '#/util/Environment.js';
 import { fromBase37, toBase37 } from '#/util/JString.js';
-import { printError, printInfo } from '#/util/Logger.js';
+import { printInfo } from '#/util/Logger.js';
 
 /**
  * client -> server opcodes for friends server
@@ -33,7 +28,10 @@ export enum FriendsClientOpcodes {
     RELAY_SHUTDOWN,
     RELAY_BROADCAST,
     RELAY_TRACK,
-    RELAY_RELOAD
+    RELAY_RELOAD,
+    RELAY_CLEARLOGINS,
+    RELAY_CLEARLOGOUTS,
+    RELAY_QUEUESCRIPT,
 }
 
 /**
@@ -49,7 +47,10 @@ export enum FriendsServerOpcodes {
     RELAY_SHUTDOWN,
     RELAY_BROADCAST,
     RELAY_TRACK,
-    RELAY_RELOAD
+    RELAY_RELOAD,
+    RELAY_CLEARLOGINS,
+    RELAY_CLEARLOGOUTS,
+    RELAY_QUEUESCRIPT,
 }
 
 // TODO make this configurable (or at least source it from somewhere common)
@@ -412,6 +413,38 @@ export class FriendServer {
                                 })
                             );
                         }
+                    } else if (type === FriendsClientOpcodes.RELAY_CLEARLOGINS) {
+                        const { nodeId } = message;
+
+                        if (typeof this.socketByWorld[nodeId] !== 'undefined') {
+                            this.socketByWorld[nodeId].send(
+                                JSON.stringify({
+                                    type: FriendsServerOpcodes.RELAY_CLEARLOGINS
+                                })
+                            );
+                        }
+                    } else if (type === FriendsClientOpcodes.RELAY_CLEARLOGOUTS) {
+                        const { nodeId } = message;
+
+                        if (typeof this.socketByWorld[nodeId] !== 'undefined') {
+                            this.socketByWorld[nodeId].send(
+                                JSON.stringify({
+                                    type: FriendsServerOpcodes.RELAY_CLEARLOGOUTS
+                                })
+                            );
+                        }
+                    } else if (type === FriendsClientOpcodes.RELAY_QUEUESCRIPT) {
+                        const { nodeId, scriptName, username } = message;
+
+                        if (typeof this.socketByWorld[nodeId] !== 'undefined') {
+                            this.socketByWorld[nodeId].send(
+                                JSON.stringify({
+                                    type: FriendsServerOpcodes.RELAY_QUEUESCRIPT,
+                                    scriptName,
+                                    username
+                                })
+                            );
+                        }
                     } else {
                         console.error(`[Friend]: Unknown message type=${type}`);
                     }
@@ -425,8 +458,7 @@ export class FriendServer {
         });
     }
 
-    async start() {
-    }
+    async start() {}
 
     private async sendFriendsListToPlayer(username37: bigint, socket: WebSocket) {
         const playerFriends = await this.repository.getFriends(username37);
