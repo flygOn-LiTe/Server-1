@@ -182,8 +182,6 @@ enum ScriptOpcode {
     STAT_BASE, // official
     STAT_HEAL, // official
     STAT_SUB,
-    STAT_BOOST, // official
-    STAT_DRAIN,
     STRONGQUEUE,
     UID, // official
     WEAKQUEUE, // official
@@ -212,7 +210,6 @@ enum ScriptOpcode {
     NPC_BASESTAT, // official
     NPC_CATEGORY, // official
     NPC_CHANGETYPE,
-    NPC_CHANGETYPE_KEEPALL,
     NPC_COORD, // official
     NPC_DAMAGE,
     NPC_DEL, // official

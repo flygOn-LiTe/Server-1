@@ -9,7 +9,6 @@ if(%arthur_progress >= ^arthur_spoken_lancelot) {
     // https://youtu.be/rCASNmyFdGE?si=6b-G5XHgfCKT-mCn&t=162
     anim(human_pickupfloor, 0);
     ~mesbox("You climb inside the crate and wait.");
-    %arhein_crate_coord = ^catherby_crate_coord;
     p_teleport(0_43_153_26_47);
     ~mesbox("You wait.");
     ~mesbox("And wait...");
@@ -43,7 +42,6 @@ if ($choice = 2) {
 }
 anim(human_pickupfloor, 0);
 ~mesbox("You climb inside the crate and wait.");
-%arhein_crate_coord = ^keep_crate_coord;
 p_teleport(0_43_153_26_47);
 ~mesbox("You wait.");
 ~mesbox("And wait...");
@@ -76,14 +74,6 @@ if ($choice = 2) {
 ~mesbox("You climb out of the crate.");
 p_teleport(%arhein_crate_coord);
 
-[oploc2,loc_67]
-~mesbox("There are buckets in the crate.|Would you like a bucket?");
-def_int $op = ~p_choice2("Yes.", 1, "No.", 2);
-if($op = 2) {
-    return;
-}
-~mesbox("You take a bucket.");
-inv_add(inv, bucket_empty, 1);
 
 [oploc1,loc_69]
 if (npc_find(coord, arhein, 12, 0) = true) {
@@ -101,15 +91,12 @@ while(loc_findnext = true) {
      if(loc_category = keep_lefaye_door) {
             def_coord $central_coord = loc_coord;
             def_int $orig_angle = loc_angle;
-            // Temp note: dur updated
-            loc_del(3);
+            loc_del(2);
             if(loc_type = loc_71) {
-                // Temp note: dur updated
-                loc_add(movecoord($central_coord, 1, 0, 0), blackknight_double_door_left, 1, loc_shape, 3);
-                loc_add(movecoord($central_coord, 1, 0, -1), blackknight_double_door_right, 3, loc_shape, 3); 
+                loc_add(movecoord($central_coord, 1, 0, 0), blackknight_double_door_left, 1, loc_shape, 2);
+                loc_add(movecoord($central_coord, 1, 0, -1), blackknight_double_door_right, 3, loc_shape, 2); 
             }
-            // Temp note: dur updated
-            loc_add($central_coord, loc_83, $orig_angle, loc_shape, 3);
+            loc_add($central_coord, loc_83, $orig_angle, loc_shape, 2);
      }
 }
 p_teleport(movecoord(coord, -1, 0, 0));

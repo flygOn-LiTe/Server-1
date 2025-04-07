@@ -3,8 +3,6 @@ import fs from 'fs';
 import { Worker as NodeWorker } from 'worker_threads';
 
 // deps
-import * as rsbuf from '@2004scape/rsbuf';
-import { PlayerInfoProt } from '@2004scape/rsbuf';
 import kleur from 'kleur';
 import forge from 'node-forge';
 
@@ -34,25 +32,26 @@ import VarSharedType from '#/cache/config/VarSharedType.js';
 import { CrcBuffer32, makeCrcs } from '#/cache/CrcTable.js';
 import { preloadClient } from '#/cache/PreloadedPacks.js';
 import WordEnc from '#/cache/wordenc/WordEnc.js';
+import { CoordGrid } from '#/engine/CoordGrid.js';
 import BlockWalk from '#/engine/entity/BlockWalk.js';
 import EntityLifeCycle from '#/engine/entity/EntityLifeCycle.js';
 import { NpcList, PlayerList } from '#/engine/entity/EntityList.js';
+import { EntityQueueState, PlayerQueueType } from '#/engine/entity/EntityQueueRequest.js';
 import { PlayerTimerType } from '#/engine/entity/EntityTimer.js';
 import HuntModeType from '#/engine/entity/hunt/HuntModeType.js';
 import HuntNobodyNear from '#/engine/entity/hunt/HuntNobodyNear.js';
 import Loc from '#/engine/entity/Loc.js';
 import { isClientConnected, NetworkPlayer } from '#/engine/entity/NetworkPlayer.js';
 import Npc from '#/engine/entity/Npc.js';
-import { NpcEventRequest, NpcEventType } from '#/engine/entity/NpcEventRequest.js';
-import NpcStat from '#/engine/entity/NpcStat.js';
 import Obj from '#/engine/entity/Obj.js';
 import Player from '#/engine/entity/Player.js';
 import { PlayerLoading } from '#/engine/entity/PlayerLoading.js';
-import { EntityQueueState, PlayerQueueType } from '#/engine/entity/PlayerQueueRequest.js';
-import { PlayerStat } from '#/engine/entity/PlayerStat.js';
 import { SessionLog } from '#/engine/entity/tracking/SessionLog.js';
+import Visibility from '#/engine/entity/Visibility.js';
 import GameMap, { changeLocCollision, changeNpcCollision, changePlayerCollision } from '#/engine/GameMap.js';
 import { Inventory } from '#/engine/Inventory.js';
+import NpcRenderer from '#/engine/renderer/NpcRenderer.js';
+import PlayerRenderer from '#/engine/renderer/PlayerRenderer.js';
 import ScriptPointer from '#/engine/script/ScriptPointer.js';
 import ScriptProvider from '#/engine/script/ScriptProvider.js';
 import ScriptRunner from '#/engine/script/ScriptRunner.js';
@@ -63,6 +62,7 @@ import Zone from '#/engine/zone/Zone.js';
 import Isaac from '#/io/Isaac.js';
 import Packet from '#/io/Packet.js';
 import { ReportAbuseReason } from '#/network/client/model/ReportAbuse.js';
+import InfoProt from '#/network/rs225/server/prot/InfoProt.js';
 import MessagePrivate from '#/network/server/model/MessagePrivate.js';
 import UpdateFriendList from '#/network/server/model/UpdateFriendList.js';
 import UpdateIgnoreList from '#/network/server/model/UpdateIgnoreList.js';
@@ -85,8 +85,7 @@ import {
     trackCycleWorldTime,
     trackCycleZoneTime,
     trackNpcCount,
-    trackPlayerCount,
-    trackSessionEventsPublished
+    trackPlayerCount
 } from '#/server/Metrics.js';
 import Environment from '#/util/Environment.js';
 import { fromBase37, toBase37, toSafeName } from '#/util/JString.js';
@@ -95,7 +94,7 @@ import { printDebug, printError, printInfo } from '#/util/Logger.js';
 import WalkTriggerSetting from '#/util/WalkTriggerSetting.js';
 import { createWorker } from '#/util/WorkerFactory.js';
 
-import InputTrackingBlob from './entity/tracking/InputEvent.js';
+import InputTrackingEvent from './entity/tracking/InputEvent.js';
 
 const priv = forge.pki.privateKeyFromPem(Environment.STANDALONE_BUNDLE ? await (await fetch('data/config/private.pem')).text() : fs.readFileSync('data/config/private.pem', 'ascii'));
 
@@ -117,7 +116,7 @@ class World {
 
     private static readonly INV_STOCKRATE: number = 100; // 1m
     private static readonly AFK_EVENTRATE: number = 500; // 5m
-    private static readonly PLAYER_SAVERATE: number = 1500; // 15m
+    private static readonly PLAYER_SAVERATE: number = 500; // 5m
     private static readonly PLAYER_COORDLOGRATE: number = 50; // 30s
 
     private static readonly TIMEOUT_NO_CONNECTION: number = Environment.NODE_DEBUG_SOCKET ? 60000 : 50; // 30s with no connection (16 ticks in osrs)
@@ -135,11 +134,14 @@ class World {
     readonly newPlayers: Set<Player>; // players joining at the end of this tick
     readonly players: PlayerList;
     readonly npcs: NpcList;
+    readonly playerGrid: Map<number, Player[]>; // store player coords for player_info for fast lookup
 
     // zones
     readonly zonesTracking: Map<number, Set<Zone>>;
     readonly queue: LinkList<EntityQueueState>;
-    readonly npcEventQueue: LinkList<NpcEventRequest>;
+
+    readonly playerRenderer: PlayerRenderer;
+    readonly npcRenderer: NpcRenderer;
 
     // debug data
     readonly lastCycleStats: number[];
@@ -162,9 +164,11 @@ class World {
         this.newPlayers = new Set();
         this.players = new PlayerList(World.PLAYERS);
         this.npcs = new NpcList(World.NPCS);
+        this.playerGrid = new Map();
         this.zonesTracking = new Map();
         this.queue = new LinkList();
-        this.npcEventQueue = new LinkList();
+        this.playerRenderer = new PlayerRenderer();
+        this.npcRenderer = new NpcRenderer();
         this.lastCycleStats = new Array(12).fill(0);
         this.cycleStats = new Array(12).fill(0);
 
@@ -315,15 +319,13 @@ class World {
             }
         }
 
-        setTimeout(() => {
-            this.loginThread.postMessage({
-                type: 'world_startup'
-            });
+        this.loginThread.postMessage({
+            type: 'world_startup'
+        });
 
-            this.friendThread.postMessage({
-                type: 'connect'
-            });
-        }, 2000);
+        this.friendThread.postMessage({
+            type: 'connect'
+        });
 
         if (!Environment.STANDALONE_BUNDLE) {
             if (!Environment.NODE_PRODUCTION) {
@@ -352,10 +354,11 @@ class World {
     cycle(): void {
         try {
             const start: number = Date.now();
-            const drift: number = Math.max(0, start - this.nextTick);
+            const drift = Math.max(0, start - this.nextTick);
 
             // world processing
             // - world queue
+            // - npc spawn scripts
             // - npc hunt
             this.processWorld();
 
@@ -365,9 +368,6 @@ class World {
             // - process pathfinding/following request
             // - client input tracking
             this.processClientsIn();
-
-            // Spawn triggers, despawn triggers
-            this.processNpcEventQueue();
 
             // npc processing (if npc is not busy)
             // - resume suspended script
@@ -506,7 +506,6 @@ class World {
         } catch (err) {
             if (err instanceof Error) {
                 printError('eep eep cabbage! An unhandled error occurred during the cycle: ' + err.message);
-                console.error(err.stack);
             }
 
             printError('Removing all players...');
@@ -564,12 +563,26 @@ class World {
             // Check if npc is alive
             if (npc.isActive) {
                 // Hunts will process even if the npc is delayed during this portion
-                if (npc.huntMode !== -1 && rsbuf.getNpcObservers(npc.nid) > 0) {
+                if (npc.huntMode !== -1 && npc.observerCount > 0) {
                     const hunt = HuntType.get(npc.huntMode);
 
                     if (hunt && hunt.type === HuntModeType.PLAYER) {
                         npc.huntAll();
                     }
+                }
+            }
+
+            // This is slightly redundant with isActive, but also checks if npc is delayed
+            // Spawn triggers shouldn't run if delayed
+            if (npc.isValid()) {
+                // Check if spawn trigger is pending
+                if (npc.spawnTriggerPending) {
+                    const type = NpcType.get(npc.type);
+                    const script = ScriptProvider.getByTrigger(ServerTriggerType.AI_SPAWN, type.id, type.category);
+                    if (script) {
+                        npc.executeScript(ScriptRunner.init(script, npc));
+                    }
+                    npc.spawnTriggerPending = false;
                 }
             }
         }
@@ -593,7 +606,7 @@ class World {
                 if (this.currentTick % World.AFK_EVENTRATE === 0) {
                     // (normal) 1/12 chance every 5 minutes of setting an afk event state (even distrubution 60/5)
                     // (afk) double the chance?
-                    player.afkEventReady = Math.random() < (player.zonesAfk() ? 0.1666 : 0.0833);
+                    player.afkEventReady = player.visibility === Visibility.DEFAULT && Math.random() < (player.zonesAfk() ? 0.1666 : 0.0833);
                 }
 
                 if (isClientConnected(player) && player.decodeIn()) {
@@ -606,7 +619,7 @@ class World {
 
                         if ((!player.target || player.target instanceof Loc || player.target instanceof Obj) && player.faceEntity !== -1) {
                             player.faceEntity = -1;
-                            player.masks |= player.entitymask;
+                            player.masks |= InfoProt.PLAYER_FACE_ENTITY.id;
                         }
 
                         if (!player.busy() && player.opcalled) {
@@ -648,18 +661,6 @@ class World {
         this.cycleStats[WorldStat.CLIENT_IN] = Date.now() - start;
     }
 
-    // Despawn and respawn
-    private processNpcEventQueue(): void {
-        for (const request of this.npcEventQueue.all()) {
-            const npc = request.npc;
-            if (!npc.delayed) {
-                request.unlink();
-                const state = ScriptRunner.init(request.script, npc);
-                npc.executeScript(state);
-            }
-        }
-    }
-
     // - resume suspended script
     // - stat regen
     // - timer
@@ -670,7 +671,7 @@ class World {
         const start: number = Date.now();
         for (const npc of this.npcs) {
             try {
-                if (npc.isActive) {
+                if (npc.checkLifeCycle(this.currentTick)) {
                     if (npc.delayed && this.currentTick >= npc.delayedUntil) npc.delayed = false;
 
                     // - resume suspended script
@@ -679,26 +680,13 @@ class World {
                     }
                 }
 
-                // - Npc Events (Respawn, Revert, Despawn)
-                if (--npc.lifecycleTick === 0) {
+                // - respawn
+                if (npc.updateLifeCycle(this.currentTick)) {
                     try {
-                        // Respawn NPC
-                        if (npc.lifecycle === EntityLifeCycle.RESPAWN && !npc.isActive) {
-                            this.addNpc(npc, -1, false);
-                        }
-                        // Revert NPC
                         if (npc.lifecycle === EntityLifeCycle.RESPAWN) {
-                            npc.revert();
-                        }
-                        // Despawn NPC
-                        else if (npc.lifecycle === EntityLifeCycle.DESPAWN) {
+                            this.addNpc(npc, -1, false);
+                        } else if (npc.lifecycle === EntityLifeCycle.DESPAWN) {
                             this.removeNpc(npc, -1);
-                            // Queue despawn trigger
-                            const type = NpcType.get(npc.type);
-                            const script = ScriptProvider.getByTrigger(ServerTriggerType.AI_DESPAWN, type.id, type.category);
-                            if (script) {
-                                this.npcEventQueue.addTail(new NpcEventRequest(NpcEventType.DESPAWN, script, npc));
-                            }
                         }
                     } catch (err) {
                         // there was an error adding or removing them, try again next tick...
@@ -711,7 +699,8 @@ class World {
 
                         printError(`[World] NPC type:${npc.type} lifecycle:${npc.lifecycle} ID:${npc.nid}`);
                         console.error(err);
-                        npc.setLifeCycle(1);
+
+                        npc.setLifeCycle(this.currentTick + 1); // retry next tick
                     }
                 }
 
@@ -724,7 +713,7 @@ class World {
                 if (npc.huntMode !== -1) {
                     const hunt = HuntType.get(npc.huntMode);
 
-                    if (hunt.nobodyNear !== HuntNobodyNear.PAUSEHUNT || rsbuf.getNpcObservers(npc.nid) > 0 || hunt.type === HuntModeType.PLAYER) {
+                    if (hunt.nobodyNear !== HuntNobodyNear.PAUSEHUNT || npc.observerCount > 0 || hunt.type === HuntModeType.PLAYER) {
                         // - hunt npc/obj/loc
                         if (hunt && hunt.type !== HuntModeType.PLAYER) {
                             npc.huntAll();
@@ -798,7 +787,7 @@ class World {
                 // - run energy
                 player.updateEnergy();
 
-                if ((player.masks & PlayerInfoProt.EXACT_MOVE) == 0) {
+                if ((player.masks & InfoProt.PLAYER_EXACT_MOVE.id) == 0) {
                     player.validateDistanceWalked();
                 }
             } catch (err) {
@@ -915,8 +904,6 @@ class World {
                         other.client.send(Uint8Array.from([15]));
                     }
 
-                    rsbuf.cleanupPlayerBuildArea(other.pid);
-
                     other.onReconnect();
 
                     this.friendThread.postMessage({
@@ -987,7 +974,6 @@ class World {
 
             // insert player into first available slot
             this.players.set(pid, player);
-            rsbuf.addPlayer(pid);
             player.pid = pid;
             player.uid = ((Number(player.username37 & 0x1fffffn) << 11) | player.pid) >>> 0;
             player.tele = true;
@@ -1016,16 +1002,9 @@ class World {
     private processZones(): void {
         const start: number = Date.now();
         const tick: number = this.currentTick;
-        try {
-            // - loc/obj despawn/respawn
-            // - compute shared buffer
-            this.zonesTracking.get(tick)?.forEach(zone => zone.tick(tick));
-        } catch (err) {
-            if (err instanceof Error) {
-                printError(`Error during processZones: ${err.message}`);
-                console.error(err.stack);
-            }
-        }
+        // - loc/obj despawn/respawn
+        // - compute shared buffer
+        this.zonesTracking.get(tick)?.forEach(zone => zone.tick(tick));
         this.cycleStats[WorldStat.ZONE] = Date.now() - start;
     }
 
@@ -1037,84 +1016,21 @@ class World {
         // TODO: benchmark this?
         for (const player of this.players) {
             player.reorient();
-            player.buildArea.rebuildNormal(); // set origin before compute player is why this is above.
 
-            const appearance = player.masks & PlayerInfoProt.APPEARANCE ? player.generateAppearance() : (player.lastAppearanceBytes ?? player.generateAppearance());
+            const grid = this.playerGrid;
+            const coord = CoordGrid.packCoord(player.level, player.x, player.z);
+            const players = grid.get(coord) ?? [];
+            players.push(player);
+            if (!grid.has(coord)) {
+                grid.set(coord, players);
+            }
 
-            rsbuf.computePlayer(
-                player.x,
-                player.level,
-                player.z,
-                player.originX,
-                player.originZ,
-                player.pid,
-                player.tele,
-                player.jump,
-                player.runDir,
-                player.walkDir,
-                player.visibility,
-                player.isActive,
-                player.masks,
-                appearance,
-                player.lastAppearance,
-                player.faceEntity,
-                player.faceX,
-                player.faceZ,
-                player.orientationX,
-                player.orientationZ,
-                player.damageTaken,
-                player.damageType,
-                player.levels[PlayerStat.HITPOINTS],
-                player.baseLevels[PlayerStat.HITPOINTS],
-                player.animId,
-                player.animDelay,
-                player.chat,
-                player.message,
-                player.messageColor ?? -1,
-                player.messageEffect ?? -1,
-                player.messageType ?? 0,
-                player.graphicId,
-                player.graphicHeight,
-                player.graphicDelay,
-                player.exactStartX,
-                player.exactStartZ,
-                player.exactEndX,
-                player.exactEndZ,
-                player.exactMoveStart,
-                player.exactMoveEnd,
-                player.exactMoveDirection
-            );
+            this.playerRenderer.computeInfo(player);
         }
 
         for (const npc of this.npcs) {
             npc.reorient();
-            rsbuf.computeNpc(
-                npc.x,
-                npc.level,
-                npc.z,
-                npc.nid,
-                npc.type,
-                npc.tele,
-                npc.runDir,
-                npc.walkDir,
-                npc.isActive,
-                npc.masks,
-                npc.faceEntity,
-                npc.faceX,
-                npc.faceZ,
-                npc.orientationX,
-                npc.orientationZ,
-                npc.damageTaken,
-                npc.damageType,
-                npc.levels[NpcStat.HITPOINTS],
-                npc.baseLevels[NpcStat.HITPOINTS],
-                npc.animId,
-                npc.animDelay,
-                npc.chat,
-                npc.graphicId,
-                npc.graphicHeight,
-                npc.graphicDelay
-            );
+            this.npcRenderer.computeInfo(npc);
         }
     }
 
@@ -1140,9 +1056,9 @@ class World {
                 // - map update
                 player.updateMap();
                 // - player info
-                player.updatePlayers();
+                player.updatePlayers(this.playerRenderer);
                 // - npc info
-                player.updateNpcs();
+                player.updateNpcs(this.npcRenderer);
                 // - zone updates
                 player.updateZones();
                 // - inv changes
@@ -1178,6 +1094,7 @@ class World {
         this.zonesTracking.delete(tick);
 
         // - reset players
+        this.playerRenderer.removeTemporary();
         for (const player of this.players) {
             player.resetEntity(false);
 
@@ -1192,7 +1109,12 @@ class World {
         }
 
         // - reset npcs
+        this.npcRenderer.removeTemporary();
         for (const npc of this.npcs) {
+            if (!npc.checkLifeCycle(tick)) {
+                continue;
+            }
+
             npc.resetEntity(false);
         }
 
@@ -1234,7 +1156,7 @@ class World {
             }
         }
 
-        rsbuf.cleanup();
+        this.playerGrid.clear();
 
         this.cycleStats[WorldStat.CLEANUP] = Date.now() - start;
     }
@@ -1315,7 +1237,6 @@ class World {
 
     addNpc(npc: Npc, duration: number, firstSpawn: boolean = true): void {
         if (firstSpawn) {
-            rsbuf.addNpc(npc.nid, npc.type);
             this.npcs.set(npc.nid, npc);
         }
 
@@ -1339,16 +1260,7 @@ class World {
         npc.resetEntity(true);
         npc.playAnimation(-1, 0);
 
-        // Queue spawn trigger
-        const type = NpcType.get(npc.type);
-        const script = ScriptProvider.getByTrigger(ServerTriggerType.AI_SPAWN, type.id, type.category);
-        if (script) {
-            this.npcEventQueue.addTail(new NpcEventRequest(NpcEventType.SPAWN, script, npc));
-        }
-
-        if (duration > -1) {
-            npc.setLifeCycle(duration);
-        }
+        npc.setLifeCycle(this.currentTick + duration);
     }
 
     removeNpc(npc: Npc, duration: number): void {
@@ -1367,12 +1279,13 @@ class World {
                 break;
         }
 
+        this.npcRenderer.removePermanent(npc.nid);
+
         if (npc.lifecycle === EntityLifeCycle.DESPAWN) {
-            rsbuf.removeNpc(npc.nid);
             this.npcs.remove(npc.nid);
             npc.cleanup();
-        } else if (npc.lifecycle === EntityLifeCycle.RESPAWN && duration > -1) {
-            npc.setLifeCycle(adjustedDuration);
+        } else if (npc.lifecycle === EntityLifeCycle.RESPAWN) {
+            npc.setLifeCycle(this.currentTick + adjustedDuration);
         }
     }
 
@@ -1400,8 +1313,8 @@ class World {
         // In OSRS I suspect they use a counter per Loc/Obj to keep track of events rather than scheduling for a tick
         // In 2004scape, we schedule for a tick. Scheduling for a tick ends up naturally 1 tick slower, so we do a -1 to compensate to match OSRS behavior
         // - Bea5
-        entity.setLifeCycle(this.currentTick + duration - 1);
-        this.trackZone(this.currentTick + duration - 1, zone);
+        entity.setLifeCycle(this.currentTick + duration);
+        this.trackZone(this.currentTick + duration, zone);
         this.trackZone(this.currentTick, zone);
     }
 
@@ -1418,10 +1331,6 @@ class World {
     }
 
     changeLoc(loc: Loc, typeID: number, shape: number, angle: number, duration: number) {
-        // If a dynamic loc is inactive, it should never return to the game world
-        if (loc.lifecycle === EntityLifeCycle.DESPAWN && !loc.isValid()) {
-            return;
-        }
         // Remove previous collision from game world
         const fromType: LocType = LocType.get(loc.type);
         if (fromType.blockwalk) {
@@ -1629,7 +1538,12 @@ class World {
             player.client.close();
         }
 
-        rsbuf.removePlayer(player.pid);
+        // Decrement observers of rendered npcs
+        for (const npc of player.buildArea.npcs) {
+            npc.observerCount = Math.max(npc.observerCount - 1, 0);
+        }
+
+        this.playerRenderer.removePermanent(player.pid);
         this.gameMap.getZone(player.x, player.z, player.level).leave(player);
         this.players.remove(player.pid);
         changeNpcCollision(player.width, player.x, player.z, player.level, false);
@@ -2069,21 +1983,6 @@ class World {
                 }
             } else if (opcode === FriendsServerOpcodes.RELAY_RELOAD) {
                 this.reload(false);
-            } else if (opcode === FriendsServerOpcodes.RELAY_CLEARLOGINS) {
-                this.loginRequests.clear();
-            } else if (opcode === FriendsServerOpcodes.RELAY_CLEARLOGOUTS) {
-                this.logoutRequests.clear();
-            } else if (opcode === FriendsServerOpcodes.RELAY_QUEUESCRIPT) {
-                const { scriptName, username } = data;
-
-                const player = this.getPlayerByUsername(username);
-                if (player) {
-                    const script = ScriptProvider.getByName(`[queue,${scriptName}]`);
-
-                    if (script) {
-                        player.enqueueScript(script);
-                    }
-                }
             } else {
                 printError('Unknown friend message: ' + opcode);
             }
@@ -2189,7 +2088,7 @@ class World {
                 return;
             }
 
-            if (this.getTotalPlayers() > Environment.NODE_MAX_CONNECTED) {
+            if (this.getTotalPlayers() > 750) {
                 client.send(Uint8Array.from([7]));
                 client.close();
                 return;
@@ -2232,7 +2131,6 @@ class World {
             event: args.length ? message + ' ' + args.join(' ') : message,
             event_type
         });
-        trackSessionEventsPublished.inc();
     }
 
     notifyPlayerBan(staff: string, username: string, until: number) {
@@ -2284,13 +2182,13 @@ class World {
         });
     }
 
-    submitInputTracking(username: string, session_uuid: string, blobs: InputTrackingBlob[]) {
+    submitInputTracking(username: string, session_uuid: string, events: InputTrackingEvent[]) {
         this.loggerThread.postMessage({
             type: 'input_track',
             username,
             session_uuid,
             timestamp: Date.now(),
-            blobs
+            events
         });
     }
 

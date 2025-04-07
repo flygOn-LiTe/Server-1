@@ -1,4 +1,4 @@
-[man]
+[man_white]
 walkanim=human_walk_f,human_walk_b,human_walk_l,human_walk_r
 readyanim=human_ready
 op2=Attack
@@ -1106,7 +1106,7 @@ desc=Freshly sheared.
 walkanim=sheep_walk
 readyanim=sheep_ready
 model1=model_2928_npc
-timer=1
+timer=25
 param=death_anim,sheep_death
 
 [sheep_fluffy]
@@ -1116,7 +1116,7 @@ desc=White and fluffy.
 walkanim=sheep_walk
 readyanim=sheep_ready
 model1=model_2929_npc
-timer=1
+timer=25
 param=death_anim,sheep_death
 
 [drake]
@@ -3481,8 +3481,7 @@ param=death_anim,earthwarrior_death
 param=attack_sound,mace_crush
 // param=defend_sound,blade5
 huntmode=cowardly
-huntrange=5
-// hunt - https://www.youtube.com/watch?v=T2ztjZEch5Y&t=153s
+huntrange=1
 // osrs sound attack warhammer_crush
 // Stats match osrs version but our version Vislvl is different.
 // https://raw.githubusercontent.com/Joshua-F/osrs-dumps/refs/heads/master/config/dump.npc npc_2840
@@ -4920,6 +4919,8 @@ param=damagetype,^stab_style
 param=attack_anim,human_sword_stab
 param=defend_anim,human_sword_defend2
 param=attack_sound,hacksword_stab
+huntmode=cowardly
+huntrange=1
 // Stats match osrs version but our version Vislvl is different.
 // https://raw.githubusercontent.com/Joshua-F/osrs-dumps/refs/heads/master/config/dump.npc npc_526
 
@@ -5436,7 +5437,7 @@ model1=model_loc_42_8
 wanderrange=0
 moverestrict=nomove
 
-[ardougne_paladin2]
+[npc_365]
 name=Paladin
 desc=A military man.
 op2=Attack

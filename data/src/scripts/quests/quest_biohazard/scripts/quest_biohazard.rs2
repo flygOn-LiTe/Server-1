@@ -80,12 +80,10 @@ mes("The pigeons don't want to leave");
 if_close;
 mes("You climb up the rope ladder...");
 if (loc_find(0_39_51_61_3, loc_2066) = true) {
-    // Temp note: dur updated
-    loc_change(loc_2065, 5);
+    loc_change(loc_2065, 4);
 }
 if (loc_find(0_39_51_62_3, loc_2066) = true) {
-    // Temp note: dur updated
-    loc_change(loc_2065, 5);
+    loc_change(loc_2065, 4);
 }
 if(%biohazard_progress = ^biohazard_released_pigeons) %biohazard_progress = ^biohazard_climbed_ladder;
 p_delay(3); // 4t
@@ -127,10 +125,6 @@ if(last_useitem = biohazard_key) @open_mournerhq_gate(^right, true);
 ~displaymessage(^dm_default);
 
 [label,open_mournerhq_gate](int $side, boolean $used_key)
-def_loc $loc_type = loc_type;
-def_locshape $loc_shape = loc_shape;
-def_int $loc_angle = loc_angle;
-def_coord $loc_coord = loc_coord;
 def_boolean $entering = ~check_axis(coord, loc_coord, loc_angle);
 if($entering = true & inv_total(inv, biohazard_key) = 0 & $used_key = false) { // cant enter with oploc1
     mes("The gate is locked.");
@@ -142,11 +136,7 @@ if($used_key = true) {
     mes("The key fits the gate.");
     p_delay(3);
 }
-if(loc_find($loc_coord, $loc_type) = true) {
-    ~open_and_close_double_door2($entering, $side, grate_open);
-} else {
-    ~open_and_close_double_door3($entering, $loc_type, $loc_shape, $loc_angle, $loc_coord, $side, grate_open);
-}
+~open_and_close_double_door2($entering, $side, grate_open);
 
 [oploc1,loc_2064]
 mes("You search the crate.");

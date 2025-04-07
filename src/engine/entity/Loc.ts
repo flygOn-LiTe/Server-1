@@ -5,13 +5,20 @@ import NonPathingEntity from '#/engine/entity/NonPathingEntity.js';
 
 export default class Loc extends NonPathingEntity {
     // constructor properties
-    private baseInfo: number;
-    private currentInfo: number;
+    private info: number;
+    private tempinfo: number;
 
     constructor(level: number, x: number, z: number, width: number, length: number, lifecycle: EntityLifeCycle, type: number, shape: number, angle: number) {
         super(level, x, z, width, length, lifecycle);
-        this.baseInfo = this.packInfo(type, shape, angle);
-        this.currentInfo = this.baseInfo;
+        this.info = this.packInfo(type, shape, angle);
+        this.tempinfo = -1;
+    }
+
+    private get currentinfo() {
+        if (this.tempinfo !== -1) {
+            return this.tempinfo;
+        }
+        return this.info;
     }
 
     private packInfo(type: number, shape: number, angle: number): number {
@@ -21,30 +28,37 @@ export default class Loc extends NonPathingEntity {
     }
 
     isChanged(): boolean {
-        return this.currentInfo !== this.baseInfo;
+        return this.tempinfo !== -1;
     }
 
     get type(): number {
-        return this.currentInfo & 0x3fff;
+        return this.currentinfo & 0x3fff;
     }
 
     get shape(): number {
-        return (this.currentInfo >> 14) & 0x1f;
+        return (this.currentinfo >> 14) & 0x1f;
     }
 
     get angle(): number {
-        return (this.currentInfo >> 19) & 0x3;
+        return (this.currentinfo >> 19) & 0x3;
     }
 
     get layer(): number {
-        return (this.baseInfo >> 21) & 0x3;
+        return (this.info >> 21) & 0x3;
     }
 
     change(type: number, shape: number, angle: number) {
-        this.currentInfo = this.packInfo(type, shape, angle);
+        // Static locs set the temp bits
+        if (this.lifecycle === EntityLifeCycle.RESPAWN) {
+            this.tempinfo = this.packInfo(type, shape, angle);
+        }
+        // Dynamic locs set their real bits
+        else if (this.lifecycle === EntityLifeCycle.DESPAWN) {
+            this.info = this.packInfo(type, shape, angle);
+        }
     }
 
     revert() {
-        this.currentInfo = this.baseInfo;
+        this.tempinfo = -1;
     }
 }

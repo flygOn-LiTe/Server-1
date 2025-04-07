@@ -4,7 +4,7 @@ if (.finduid(%duelpartner) = true) {
     def_coord $random_coord2 = $random_coord1;
 
     if ($random_coord1 = null) {
-        %duelstatus = ^duelstatus_reset;
+        %duelstatus = 0;
         %duelpartner = null;
         ~mesbox("All arenas of this type are full! Select another type of arena, try|again in a few minutes or try a different server."); // https://youtu.be/TcrIr9O92sw?t=89
         return;
@@ -144,7 +144,7 @@ if (~in_duel_arena(coord) = false) {
     return;
 }
 say("FIGHT!");
-%duelstatus = ^duelstatus_start;
+%duelstatus = 5;
 clearsofttimer(duel_arena_start_fight);
 
 [walktrigger,duel_arena_no_move]
@@ -158,7 +158,7 @@ if (~in_duel_arena(coord) = false) {
     clearsofttimer(duel_arena_time_limit);
     return;
 }
-%duelstatus = ^duelstatus_reset;
+%duelstatus = 0;
 %duelpartner = null;
 if_close;
 queue(duel_arena_time_limit, 0);
@@ -167,4 +167,4 @@ queue(duel_arena_time_limit, 0);
 [queue,duel_arena_time_limit]
 ~duel_give_stake_back;
 ~duel_reset_all;
-~mesbox("Your duel ended in an honourable draw."); // RS3 message: https://archive.org/details/runelibris
+~mesbox("Time is up, there was no winner!"); // complete guess

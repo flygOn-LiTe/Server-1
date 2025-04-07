@@ -14,7 +14,7 @@ export default class InvButtonDHandler extends MessageHandler<InvButtonD> {
         const { component: comId, slot, targetSlot } = message;
 
         const com = Component.get(comId);
-        if (typeof com === 'undefined' || !player.isComponentVisible(com) || !com.draggable) {
+        if (typeof com === 'undefined' || !player.isComponentVisible(com)) {
             return false;
         }
 
@@ -24,7 +24,7 @@ export default class InvButtonDHandler extends MessageHandler<InvButtonD> {
         }
 
         const inv = player.getInventoryFromListener(listener);
-        if (!inv || !inv.validSlot(slot) || !inv.validSlot(targetSlot) || !inv.get(slot)) {
+        if (!inv || !inv.validSlot(slot) || !inv.validSlot(targetSlot)) {
             return false;
         }
 

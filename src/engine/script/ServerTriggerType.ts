@@ -158,8 +158,7 @@ enum ServerTriggerType {
     ZONE = 163,
     ZONEEXIT = 164,
     CHANGESTAT = 165,
-    AI_SPAWN = 166,
-    AI_DESPAWN = 167
+    AI_SPAWN = 166
 }
 
 // eslint-disable-next-line @typescript-eslint/no-namespace

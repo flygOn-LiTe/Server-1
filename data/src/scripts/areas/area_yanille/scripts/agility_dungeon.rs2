@@ -106,8 +106,7 @@ if(last_useitem = sinister_key) {
     inv_add(inv, unidentified_avantoe, 1);
     inv_add(inv, unidentified_kwuarm, 1);
     inv_add(inv, unidentified_torstol, 1);
-    // Temp note: dur updated
-    loc_change(loc_3368, 5);
+    loc_change(loc_3368, 4);
     return;
 }
 ~displaymessage(^dm_default);

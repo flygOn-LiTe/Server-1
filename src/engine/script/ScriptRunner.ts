@@ -1,9 +1,10 @@
+
 import Entity from '#/engine/entity/Entity.js';
+import { ScriptArgument } from '#/engine/entity/EntityQueueRequest.js';
 import Loc from '#/engine/entity/Loc.js';
 import Npc from '#/engine/entity/Npc.js';
 import Obj from '#/engine/entity/Obj.js';
 import Player from '#/engine/entity/Player.js';
-import { ScriptArgument } from '#/engine/entity/PlayerQueueRequest.js';
 import CoreOps from '#/engine/script/handlers/CoreOps.js';
 import DbOps from '#/engine/script/handlers/DbOps.js';
 import DebugOps from '#/engine/script/handlers/DebugOps.js';
@@ -23,7 +24,6 @@ import ScriptFile from '#/engine/script/ScriptFile.js';
 import ScriptOpcode from '#/engine/script/ScriptOpcode.js';
 import ScriptPointer from '#/engine/script/ScriptPointer.js';
 import ScriptState from '#/engine/script/ScriptState.js';
-import World from '#/engine/World.js';
 import Environment from '#/util/Environment.js';
 import { printWarning } from '#/util/Logger.js';
 
@@ -194,15 +194,6 @@ export default class ScriptRunner {
                         trace++;
                         state.self.wrappedMessageGame(`    ${trace}: ${frame.script.name} - ${frame.script.fileName}:${frame.script.lineNumber(frame.pc)}`);
                     }
-                }
-
-                if (Environment.NODE_PRODUCTION) {
-                    state.self.logout();
-                    state.self.loggingOut = true;
-                }
-            } else if (state.self instanceof Npc) {
-                if (Environment.NODE_PRODUCTION) {
-                    World.removeNpc(state.self, 0);
                 }
             }
 
