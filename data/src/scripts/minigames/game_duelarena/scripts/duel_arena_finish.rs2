@@ -7,7 +7,6 @@ clearqueue(duel_finish);
 queue(duel_finish, 0);
 
 if (.finduid(%duelpartner) = true) {
-    session_log(^log_moderator, "Lost a duel against <.name>");
     .if_close;
     .%duelstatus = ^duelstatus_victory;
     .clearqueue(duel_finish);
@@ -23,7 +22,6 @@ if (.finduid(%duelpartner) = true) {
     if (%duelstatus = ^duelstatus_victory) {
         if_settext(duel_win:com_99, "You are victorious!");
         mes("Well done! You have defeated <.displayname>!");
-        session_log(^log_moderator, "Won a duel against <.name>");
         midi_jingle(^duel_win_2_jingle, ^duel_win_2_jingle_millis);
         ~duel_reset_all;
         ~duel_spoils;
@@ -31,7 +29,6 @@ if (.finduid(%duelpartner) = true) {
     } else if (%duelstatus = ^duelstatus_opponent_resigned) {
         if_settext(duel_win:com_99, "You are victorious! Your opponent resigned!"); // 2006
         mes("Well done! <.displayname> resigned!"); // 2006
-        session_log(^log_moderator, "Won a duel by forfeit against <.name>");
         midi_jingle(^duel_win_2_jingle, ^duel_win_2_jingle_millis);
         ~duel_reset_all;
         ~duel_spoils;
@@ -67,6 +64,7 @@ while ($i < inv_size(tempinv)) {
 
 buildappearance(worn);
 ~prayer_deactivate_all;
+~follower_death;
 p_telejump(~duel_arena_finish_coord(coord));
 anim(null, 0);
 p_stopaction;
@@ -79,7 +77,7 @@ clearqueue(player_death_default);
 ~clear_poison;
 ~update_all(inv_getobj(worn, ^wearpos_rhand));
 hint_stop;
-%duelstatus = ^duelstatus_reset;
+%duelstatus = 0;
 %duelpartner = null;
 
 [proc,duel_give_stake_back]

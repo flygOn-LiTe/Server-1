@@ -1,4 +1,4 @@
-[opnpc3,man] // Man
+[opnpc3,man_white] // Man
 @attempt_pick_pocket(npc_type);
 
 [opnpc3,man_blue] // Man

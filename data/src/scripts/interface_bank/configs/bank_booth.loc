@@ -1,4 +1,4 @@
-[bankbooth]
+[bank_booth]
 name=Bank booth
 desc=The bank teller will serve you from here.
 model=model_loc_2213

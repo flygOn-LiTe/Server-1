@@ -461,14 +461,6 @@ const ScriptOpcodePointers: {
         require: ['active_player'],
         require2: ['active_player2']
     },
-    [ScriptOpcode.STAT_BOOST]: {
-        require: ['active_player'],
-        require2: ['active_player2']
-    },
-    [ScriptOpcode.STAT_DRAIN]: {
-        require: ['active_player'],
-        require2: ['active_player2']
-    },
     [ScriptOpcode.UID]: {
         require: ['active_player'],
         require2: ['active_player2']
@@ -531,10 +523,6 @@ const ScriptOpcodePointers: {
         require2: ['active_npc2']
     },
     [ScriptOpcode.NPC_CHANGETYPE]: {
-        require: ['active_npc'],
-        require2: ['active_npc2']
-    },
-    [ScriptOpcode.NPC_CHANGETYPE_KEEPALL]: {
         require: ['active_npc'],
         require2: ['active_npc2']
     },

@@ -40,7 +40,7 @@ export default class RebuildGetMapsHandler extends MessageHandler<RebuildGetMaps
             }
         }
 
-        player.buildArea.rebuildZones();
+        player.rebuildZones();
 
         return true;
     }

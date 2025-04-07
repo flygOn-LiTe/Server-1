@@ -347,7 +347,7 @@ const ServerOps: CommandHandlers = {
 
             const layer = layerForLocShape(loc.shape);
 
-            if (!loc.isActive && layer === LocLayer.WALL) {
+            if (!loc.checkLifeCycle(World.currentTick) && layer === LocLayer.WALL) {
                 continue;
             }
 

@@ -5,12 +5,10 @@ while(loc_findnext = true) {
         def_coord $central_coord = loc_coord;
         def_int $orig_angle = loc_angle;
         def_loc $type = loc_type;
-        // Temp note: dur updated
-        loc_change(loc_83, 3);
+        loc_change(loc_83, 2);
         if($type = loc_3015) {
-            // Temp note: dur updated
-             loc_add(movecoord($central_coord, 1, 0, 0), loc_49, 1, loc_shape, 3);
-             loc_add(movecoord($central_coord, 2, 0, 0), loc_50, 1, loc_shape, 3);
+             loc_add(movecoord($central_coord, 1, 0, 0), loc_49, 1, loc_shape, 2);
+             loc_add(movecoord($central_coord, 2, 0, 0), loc_50, 1, loc_shape, 2);
         }
     }
 }
@@ -134,15 +132,13 @@ while(loc_findnext = true) {
      if(loc_category = tut_mining_exit) {
             def_coord $central_coord = loc_coord;
             def_int $orig_angle = loc_angle;
-            // Temp note: dur updated
-            loc_del(3);
+
+            loc_del(2);
             if(loc_type = loc_3020) {
-                // Temp note: dur updated
-                loc_add(movecoord($central_coord, 1, 0, 0), loc_1562, 1, loc_shape, 3);
-                loc_add(movecoord($central_coord, 1, 0, -1), loc_1563, 3, loc_shape, 3);
+                loc_add(movecoord($central_coord, 1, 0, 0), loc_1562, 1, loc_shape, 2);
+                loc_add(movecoord($central_coord, 1, 0, -1), loc_1563, 3, loc_shape, 2);
             }
-            // Temp note: dur updated
-            loc_add($central_coord, loc_83, $orig_angle, loc_shape, 3);
+            loc_add($central_coord, loc_83, $orig_angle, loc_shape, 2);
      }
 }
 sound_synth(door_open, 0, 0);
@@ -184,15 +180,12 @@ while(loc_findnext = true) {
     if(loc_category = rat_pit_cage) {
         def_coord $central_coord = loc_coord;
         def_int $orig_angle = loc_angle;
-        // Temp note: dur updated
-        loc_del(3);
+        loc_del(2);
         if(loc_type = loc_3022) {
-            // Temp note: dur updated
-            loc_add(movecoord($central_coord, -1, 0, 0), loc_1562, 3, loc_shape, 3);
-            loc_add(movecoord($central_coord, -1, 0, 1), loc_1563, 1, loc_shape, 3);
+            loc_add(movecoord($central_coord, -1, 0, 0), loc_1562, 3, loc_shape, 2);
+            loc_add(movecoord($central_coord, -1, 0, 1), loc_1563, 1, loc_shape, 2);
         }
-        // Temp note: dur updated
-        loc_add($central_coord, loc_83, $orig_angle, loc_shape, 3);
+        loc_add($central_coord, loc_83, $orig_angle, loc_shape, 2);
     }
 }
 sound_synth(door_open, 0, 0);

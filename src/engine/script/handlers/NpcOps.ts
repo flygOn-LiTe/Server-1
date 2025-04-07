@@ -11,11 +11,11 @@ import Loc from '#/engine/entity/Loc.js';
 import Npc from '#/engine/entity/Npc.js';
 import NpcIteratorType from '#/engine/entity/NpcIteratorType.js';
 import NpcMode from '#/engine/entity/NpcMode.js';
-import NpcStat from '#/engine/entity/NpcStat.js';
 import Obj from '#/engine/entity/Obj.js';
 import { NpcIterator } from '#/engine/script/ScriptIterators.js';
 import ScriptOpcode from '#/engine/script/ScriptOpcode.js';
 import ScriptPointer, { ActiveNpc, checkedHandler } from '#/engine/script/ScriptPointer.js';
+import ScriptProvider from '#/engine/script/ScriptProvider.js';
 import { CommandHandlers } from '#/engine/script/ScriptRunner.js';
 import ScriptState from '#/engine/script/ScriptState.js';
 import { check, CoordValid, DurationValid, HitTypeValid, HuntTypeValid, HuntVisValid, NpcModeValid, NpcStatValid, NpcTypeValid, NumberNotNull, ParamTypeValid, QueueValid, SpotAnimTypeValid } from '#/engine/script/ScriptValidators.js';
@@ -146,7 +146,12 @@ const NpcOps: CommandHandlers = {
         const arg = state.popInt();
         const queueId = check(state.popInt(), QueueValid);
 
-        state.activeNpc.enqueueScript(ServerTriggerType.AI_QUEUE1 + queueId - 1, delay, arg);
+        const npcType: NpcType = check(state.activeNpc.type, NpcTypeValid);
+        const script = ScriptProvider.getByTrigger(ServerTriggerType.AI_QUEUE1 + queueId - 1, npcType.id, npcType.category);
+
+        if (script) {
+            state.activeNpc.enqueueScript(script, delay, arg);
+        }
     }),
 
     [ScriptOpcode.NPC_RANGE]: checkedHandler(ActiveNpc, state => {
@@ -239,11 +244,11 @@ const NpcOps: CommandHandlers = {
         const npc = state.activeNpc;
         const base = npc.baseLevels[stat];
         const current = npc.levels[stat];
-        const healed = current + ((constant + (base * percent) / 100) | 0);
+        const healed = current + (constant + (current * percent) / 100);
         npc.levels[stat] = Math.min(healed, base);
 
         // reset hero points if hp current == base
-        if (stat === NpcStat.HITPOINTS && npc.levels[NpcStat.HITPOINTS] >= npc.baseLevels[NpcStat.HITPOINTS]) {
+        if (stat === 0 && npc.levels[stat] === npc.baseLevels[stat]) {
             npc.heroPoints.clear();
         }
     }),
@@ -383,19 +388,7 @@ const NpcOps: CommandHandlers = {
     }),
 
     [ScriptOpcode.NPC_CHANGETYPE]: checkedHandler(ActiveNpc, state => {
-        const [id, duration] = state.popInts(2);
-        const npcType: number = check(id, NpcTypeValid).id;
-        check(duration, DurationValid);
-
-        state.activeNpc.changeType(npcType, duration);
-    }),
-
-    [ScriptOpcode.NPC_CHANGETYPE_KEEPALL]: checkedHandler(ActiveNpc, state => {
-        const [id, duration] = state.popInts(2);
-        const npcType: number = check(id, NpcTypeValid).id;
-        check(duration, DurationValid);
-
-        state.activeNpc.changeType(npcType, duration, false);
+        state.activeNpc.changeType(check(state.popInt(), NpcTypeValid).id);
     }),
 
     [ScriptOpcode.NPC_GETMODE]: checkedHandler(ActiveNpc, state => {
@@ -425,12 +418,11 @@ const NpcOps: CommandHandlers = {
         check(percent, NumberNotNull);
 
         const npc = state.activeNpc;
-        const base = npc.baseLevels[stat];
         const current = npc.levels[stat];
-        const added = current + ((constant + (base * percent) / 100) | 0);
+        const added = current + (constant + (current * percent) / 100);
         npc.levels[stat] = Math.min(added, 255);
 
-        if (stat === NpcStat.HITPOINTS && npc.levels[NpcStat.HITPOINTS] >= npc.baseLevels[NpcStat.HITPOINTS]) {
+        if (stat === 0 && npc.levels[stat] >= npc.baseLevels[stat]) {
             npc.heroPoints.clear();
         }
     }),
@@ -443,9 +435,8 @@ const NpcOps: CommandHandlers = {
         check(percent, NumberNotNull);
 
         const npc = state.activeNpc;
-        const base = npc.baseLevels[stat];
         const current = npc.levels[stat];
-        const subbed = current - ((constant + (base * percent) / 100) | 0);
+        const subbed = current - (constant + (current * percent) / 100);
         npc.levels[stat] = Math.max(subbed, 0);
     }),
 

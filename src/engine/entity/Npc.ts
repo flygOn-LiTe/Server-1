@@ -1,4 +1,3 @@
-import { NpcInfoProt, Visibility } from '@2004scape/rsbuf';
 import { CollisionFlag, CollisionType } from '@2004scape/rsmod-pathfinder';
 
 import HuntType from '#/cache/config/HuntType.js';
@@ -10,6 +9,7 @@ import { Direction, CoordGrid } from '#/engine/CoordGrid.js';
 import BlockWalk from '#/engine/entity/BlockWalk.js';
 import Entity from '#/engine/entity/Entity.js';
 import EntityLifeCycle from '#/engine/entity/EntityLifeCycle.js';
+import { EntityQueueRequest, NpcQueueType } from '#/engine/entity/EntityQueueRequest.js';
 import HeroPoints from '#/engine/entity/HeroPoints.js';
 import HuntCheckNotTooStrong from '#/engine/entity/hunt/HuntCheckNotTooStrong.js';
 import HuntModeType from '#/engine/entity/hunt/HuntModeType.js';
@@ -19,12 +19,12 @@ import MoveRestrict from '#/engine/entity/MoveRestrict.js';
 import MoveSpeed from '#/engine/entity/MoveSpeed.js';
 import MoveStrategy from '#/engine/entity/MoveStrategy.js';
 import NpcMode from '#/engine/entity/NpcMode.js';
-import { NpcQueueRequest } from '#/engine/entity/NpcQueueRequest.js';
 import NpcStat from '#/engine/entity/NpcStat.js';
 import Obj from '#/engine/entity/Obj.js';
 import PathingEntity from '#/engine/entity/PathingEntity.js';
 import Player from '#/engine/entity/Player.js';
-import { isFlagged, findNaivePath } from '#/engine/GameMap.js';
+import Visibility from '#/engine/entity/Visibility.js';
+import { isFlagged , findNaivePath } from '#/engine/GameMap.js';
 import ScriptFile from '#/engine/script/ScriptFile.js';
 import { HuntIterator } from '#/engine/script/ScriptIterators.js';
 import ScriptPointer from '#/engine/script/ScriptPointer.js';
@@ -33,14 +33,15 @@ import ScriptRunner from '#/engine/script/ScriptRunner.js';
 import ScriptState from '#/engine/script/ScriptState.js';
 import ServerTriggerType from '#/engine/script/ServerTriggerType.js';
 import World from '#/engine/World.js';
+import InfoProt from '#/network/rs225/server/prot/InfoProt.js';
 import LinkList from '#/util/LinkList.js';
 
 export default class Npc extends PathingEntity {
     // constructor properties
     nid: number;
+    type: number;
     uid: number;
-    baseType: number;
-    currentType: number;
+    origType: number;
     startX: number;
     startZ: number;
     startLevel: number;
@@ -53,7 +54,7 @@ export default class Npc extends PathingEntity {
 
     // script variables
     activeScript: ScriptState | null = null;
-    queue: LinkList<NpcQueueRequest> = new LinkList();
+    queue: LinkList<EntityQueueRequest> = new LinkList();
     timerInterval: number = 0;
     timerClock: number = 0;
     regenClock: number = 0;
@@ -61,26 +62,26 @@ export default class Npc extends PathingEntity {
     huntMode: number = -1;
     huntTarget: Entity | null = null;
     huntrange: number = 0;
+    observerCount: number = 0;
     spawnTriggerPending: boolean = true;
 
     nextPatrolTick: number = -1;
     nextPatrolPoint: number = 0;
     delayedPatrol: boolean = false;
-    resetOnRevert: boolean = true;
 
     lastWanderTick: number = 0;
 
     heroPoints: HeroPoints = new HeroPoints(16); // be sure to reset when stats are recovered/reset
 
     constructor(level: number, x: number, z: number, width: number, length: number, lifecycle: EntityLifeCycle, nid: number, type: number, moveRestrict: MoveRestrict, blockWalk: BlockWalk) {
-        super(level, x, z, width, length, lifecycle, moveRestrict, blockWalk, MoveStrategy.NAIVE, NpcInfoProt.FACE_COORD, NpcInfoProt.FACE_ENTITY);
+        super(level, x, z, width, length, lifecycle, moveRestrict, blockWalk, MoveStrategy.NAIVE, InfoProt.NPC_FACE_COORD.id, InfoProt.NPC_FACE_ENTITY.id);
         this.nid = nid;
-        this.baseType = type;
-        this.currentType = type;
+        this.type = type;
         this.uid = (type << 16) | nid;
         this.startX = this.x;
         this.startZ = this.z;
         this.startLevel = this.level;
+        this.origType = type;
 
         const npcType = NpcType.get(type);
 
@@ -125,7 +126,7 @@ export default class Npc extends PathingEntity {
 
     resetEntity(respawn: boolean) {
         if (respawn) {
-            this.currentType = this.baseType;
+            this.type = this.origType;
             this.uid = (this.type << 16) | this.nid;
             this.unfocus();
             this.playAnimation(-1, 0); // reset animation or last anim has a chance to appear on respawn
@@ -153,10 +154,9 @@ export default class Npc extends PathingEntity {
             this.huntMode = npcType.huntmode;
             this.huntClock = 0;
             this.huntTarget = null;
-            this.tele = true;
-        } else {
-            super.resetPathingEntity();
+            this.spawnTriggerPending = true;
         }
+        super.resetPathingEntity();
     }
 
     pathToPathingTarget(): void {
@@ -346,7 +346,7 @@ export default class Npc extends PathingEntity {
     }
 
     processQueue() {
-        for (const request of this.queue.all()) {
+        for (let request = this.queue.head(); request !== null; request = this.queue.next()) {
             // purposely only decrements the delay when the npc is not delayed
             if (!this.delayed) {
                 request.delay--;
@@ -354,19 +354,18 @@ export default class Npc extends PathingEntity {
 
             if (!this.delayed && request.delay <= 0) {
                 request.unlink();
-                const type: NpcType = NpcType.get(this.type);
-                const script = ScriptProvider.getByTrigger(request.queueId, type.id, type.category);
-                if (script) {
-                    const state = ScriptRunner.init(script, this, null, request.args);
-                    state.lastInt = request.lastInt;
-                    this.executeScript(state);
-                }
+
+                const state = ScriptRunner.init(request.script, this, null, request.args);
+                state.lastInt = request.lastInt;
+                const save = this.queue.cursor; // LinkList-specific behavior so we can getqueue/clearqueue inside of this
+                this.executeScript(state);
+                this.queue.cursor = save;
             }
         }
     }
 
-    enqueueScript(queueId: number, delay = 0, arg: number = 0) {
-        const request = new NpcQueueRequest(queueId, [], delay);
+    enqueueScript(script: ScriptFile, delay = 0, arg: number = 0) {
+        const request = new EntityQueueRequest(NpcQueueType.NORMAL, script, [], delay);
         request.lastInt = arg;
         this.queue.addTail(request);
     }
@@ -441,14 +440,11 @@ export default class Npc extends PathingEntity {
     }
 
     noMode(): void {
+        // this.clearInteraction();
         this.updateMovement(false);
-    }
-
-    clearInteraction(): void {
-        super.clearInteraction();
-        this.targetOp = NpcMode.NONE;
-        this.faceEntity = -1;
-        this.masks |= NpcInfoProt.FACE_ENTITY;
+        // this.targetOp = NpcMode.NONE;
+        // this.faceEntity = -1;
+        // this.masks |= InfoProt.NPC_FACE_ENTITY.id;
     }
 
     defaultMode(): void {
@@ -457,7 +453,7 @@ export default class Npc extends PathingEntity {
         this.targetOp = type.defaultmode;
         this.lastWanderTick = World.currentTick; // osrs
         this.faceEntity = -1;
-        this.masks |= this.entitymask;
+        this.masks |= InfoProt.NPC_FACE_ENTITY.id;
 
         const npcType: NpcType = NpcType.get(this.type);
         this.huntMode = npcType.huntmode;
@@ -972,7 +968,7 @@ export default class Npc extends PathingEntity {
         if (anim == -1 || this.animId == -1 || SeqType.get(anim).priority > SeqType.get(this.animId).priority || SeqType.get(this.animId).priority === 0) {
             this.animId = anim;
             this.animDelay = delay;
-            this.masks |= NpcInfoProt.ANIM;
+            this.masks |= InfoProt.NPC_ANIM.id;
         }
     }
 
@@ -980,7 +976,7 @@ export default class Npc extends PathingEntity {
         this.graphicId = spotanim;
         this.graphicHeight = height;
         this.graphicDelay = delay;
-        this.masks |= NpcInfoProt.SPOT_ANIM;
+        this.masks |= InfoProt.NPC_SPOTANIM.id;
     }
 
     applyDamage(damage: number, type: number) {
@@ -995,7 +991,7 @@ export default class Npc extends PathingEntity {
             this.levels[NpcStat.HITPOINTS] = current - damage;
         }
 
-        this.masks |= NpcInfoProt.DAMAGE;
+        this.masks |= InfoProt.NPC_DAMAGE.id;
     }
 
     say(text: string) {
@@ -1004,42 +1000,20 @@ export default class Npc extends PathingEntity {
         }
 
         this.chat = text;
-        this.masks |= NpcInfoProt.SAY;
+        this.masks |= InfoProt.NPC_SAY.id;
     }
 
     faceSquare(x: number, z: number) {
         this.focus(CoordGrid.fine(x, 1), CoordGrid.fine(z, 1), true);
     }
 
-    get type(): number {
-        return this.currentType;
-    }
-
-    changeType(type: number, duration: number, reset: boolean = true) {
-        if (!this.isActive || duration < 1) {
-            return;
-        }
-        this.currentType = type;
-        this.masks |= NpcInfoProt.CHANGE_TYPE;
+    changeType(type: number) {
+        this.type = type;
+        this.masks |= InfoProt.NPC_CHANGE_TYPE.id;
         this.uid = (type << 16) | this.nid;
-        this.resetOnRevert = reset;
 
-        if (type === this.baseType && this.lifecycle === EntityLifeCycle.RESPAWN) {
-            this.setLifeCycle(-1);
-        } else {
-            this.setLifeCycle(duration);
-        }
-    }
-
-    revert(): void {
-        if (this.resetOnRevert) {
-            World.removeNpc(this, -1);
-            World.addNpc(this, -1, false);
-        } else {
-            this.currentType = this.baseType;
-            this.masks |= NpcInfoProt.CHANGE_TYPE;
-            this.uid = (this.type << 16) | this.nid;
-        }
+        const npcType: NpcType = NpcType.get(type);
+        this.setTimer(npcType.timer);
     }
 
     isValid(_hash64?: bigint): boolean {

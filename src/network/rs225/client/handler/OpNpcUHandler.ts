@@ -1,5 +1,3 @@
-import * as rsbuf from '@2004scape/rsbuf';
-
 import Component from '#/cache/config/Component.js';
 import ObjType from '#/cache/config/ObjType.js';
 import Interaction from '#/engine/entity/Interaction.js';
@@ -21,7 +19,7 @@ export default class OpNpcUHandler extends MessageHandler<OpNpcU> {
         }
 
         const com = Component.get(comId);
-        if (typeof com === 'undefined' || !player.isComponentVisible(com) || !com.interactable) {
+        if (typeof com === 'undefined' || !player.isComponentVisible(com)) {
             player.write(new UnsetMapFlag());
             player.clearPendingAction();
             return false;
@@ -48,7 +46,7 @@ export default class OpNpcUHandler extends MessageHandler<OpNpcU> {
             return false;
         }
 
-        if (!rsbuf.hasNpc(player.pid, npc.nid)) {
+        if (!player.buildArea.npcs.has(npc)) {
             player.write(new UnsetMapFlag());
             player.clearPendingAction();
             return false;

@@ -1,10 +1,12 @@
 import 'dotenv/config';
 
-import * as rsbuf from '@2004scape/rsbuf';
+
 
 import InvType from '#/cache/config/InvType.js';
 import { CoordGrid } from '#/engine/CoordGrid.js';
 import Player from '#/engine/entity/Player.js';
+import NpcRenderer from '#/engine/renderer/NpcRenderer.js';
+import PlayerRenderer from '#/engine/renderer/PlayerRenderer.js';
 import World from '#/engine/World.js';
 import WorldStat from '#/engine/WorldStat.js';
 import Zone from '#/engine/zone/Zone.js';
@@ -249,6 +251,8 @@ export class NetworkPlayer extends Player {
     }
 
     updateMap() {
+        this.rebuildNormal();
+
         // update the camera after rebuild.
         for (let info = this.cameraPackets.head(); info !== null; info = this.cameraPackets.next()) {
             const localX = info.camX - CoordGrid.zoneOrigin(this.originX);
@@ -277,7 +281,7 @@ export class NetworkPlayer extends Player {
         // zone changed
         const zone = CoordGrid.packCoord(this.level, (this.x >> 3) << 3, (this.z >> 3) << 3);
         if (this.lastZone !== zone) {
-            this.buildArea.rebuildZones();
+            this.rebuildZones();
 
             // zone triggers
             const lastWasMulti = World.gameMap.isMulti(this.lastZone);
@@ -296,12 +300,12 @@ export class NetworkPlayer extends Player {
         }
     }
 
-    updatePlayers() {
-        this.write(new PlayerInfo(rsbuf.playerInfo(this.client.out.pos, this.pid, Math.abs(this.lastTickX - this.x), Math.abs(this.lastTickZ - this.z), this.lastLevel !== this.level)));
+    updatePlayers(renderer: PlayerRenderer) {
+        this.write(new PlayerInfo(World.currentTick, renderer, this, Math.abs(this.lastTickX - this.x), Math.abs(this.lastTickZ - this.z), this.lastLevel !== this.level));
     }
 
-    updateNpcs() {
-        this.write(new NpcInfo(rsbuf.npcInfo(this.client.out.pos, this.pid, Math.abs(this.lastTickX - this.x), Math.abs(this.lastTickZ - this.z), this.lastLevel !== this.level)));
+    updateNpcs(renderer: NpcRenderer) {
+        this.write(new NpcInfo(World.currentTick, renderer, this, Math.abs(this.lastTickX - this.x), Math.abs(this.lastTickZ - this.z), this.lastLevel !== this.level));
     }
 
     updateZones() {

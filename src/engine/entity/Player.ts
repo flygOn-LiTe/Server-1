@@ -1,6 +1,5 @@
 import 'dotenv/config';
 
-import { PlayerInfoProt, Visibility } from '@2004scape/rsbuf';
 import { CollisionType, CollisionFlag } from '@2004scape/rsmod-pathfinder';
 
 import Component from '#/cache/config/Component.js';
@@ -21,6 +20,7 @@ import BuildArea from '#/engine/entity/BuildArea.js';
 import CameraInfo from '#/engine/entity/CameraInfo.js';
 import Entity from '#/engine/entity/Entity.js';
 import EntityLifeCycle from '#/engine/entity/EntityLifeCycle.js';
+import { EntityQueueRequest, PlayerQueueType, QueueType, ScriptArgument } from '#/engine/entity/EntityQueueRequest.js';
 import { EntityTimer, PlayerTimerType } from '#/engine/entity/EntityTimer.js';
 import HeroPoints from '#/engine/entity/HeroPoints.js';
 import Loc from '#/engine/entity/Loc.js';
@@ -31,7 +31,6 @@ import { isClientConnected } from '#/engine/entity/NetworkPlayer.js';
 import Npc from '#/engine/entity/Npc.js';
 import Obj from '#/engine/entity/Obj.js';
 import PathingEntity from '#/engine/entity/PathingEntity.js';
-import { PlayerQueueRequest, PlayerQueueType, QueueType, ScriptArgument } from '#/engine/entity/PlayerQueueRequest.js';
 import { PlayerStat, PlayerStatEnabled, PlayerStatFree } from '#/engine/entity/PlayerStat.js';
 import InputTracking from '#/engine/entity/tracking/InputTracking.js';
 import { changeNpcCollision, changePlayerCollision, findNaivePath, reachedEntity, reachedLoc, reachedObj } from '#/engine/GameMap.js';
@@ -43,7 +42,9 @@ import ScriptRunner from '#/engine/script/ScriptRunner.js';
 import ScriptState from '#/engine/script/ScriptState.js';
 import ServerTriggerType from '#/engine/script/ServerTriggerType.js';
 import World from '#/engine/World.js';
+import ZoneMap from '#/engine/zone/ZoneMap.js';
 import Packet from '#/io/Packet.js';
+import InfoProt from '#/network/rs225/server/prot/InfoProt.js';
 import ChatFilterSettings from '#/network/server/model/ChatFilterSettings.js';
 import HintArrow from '#/network/server/model/HintArrow.js';
 import IfClose from '#/network/server/model/IfClose.js';
@@ -52,6 +53,7 @@ import LastLoginInfo from '#/network/server/model/LastLoginInfo.js';
 import MessageGame from '#/network/server/model/MessageGame.js';
 import MidiJingle from '#/network/server/model/MidiJingle.js';
 import MidiSong from '#/network/server/model/MidiSong.js';
+import RebuildNormal from '#/network/server/model/RebuildNormal.js';
 import ResetAnims from '#/network/server/model/ResetAnims.js';
 import ResetClientVarCache from '#/network/server/model/ResetClientVarCache.js';
 import TutOpen from '#/network/server/model/TutOpen.js';
@@ -61,6 +63,7 @@ import UpdateUid192 from '#/network/server/model/UpdatePid.js';
 import UpdateRebootTimer from '#/network/server/model/UpdateRebootTimer.js';
 import UpdateRunEnergy from '#/network/server/model/UpdateRunEnergy.js';
 import UpdateStat from '#/network/server/model/UpdateStat.js';
+import UpdateZoneFullFollows from '#/network/server/model/UpdateZoneFullFollows.js';
 import VarpLarge from '#/network/server/model/VarpLarge.js';
 import VarpSmall from '#/network/server/model/VarpSmall.js';
 import OutgoingMessage from '#/network/server/OutgoingMessage.js';
@@ -70,6 +73,8 @@ import { ChatModePrivate, ChatModePublic, ChatModeTradeDuel } from '#/util/ChatM
 import Environment from '#/util/Environment.js';
 import { toDisplayName } from '#/util/JString.js';
 import LinkList from '#/util/LinkList.js';
+
+import Visibility from './Visibility.js';
 
 const levelExperience = new Int32Array(99);
 
@@ -187,7 +192,7 @@ export default class Player extends PathingEntity {
     save() {
         const sav = Packet.alloc(1);
         sav.p2(0x2004); // magic
-        sav.p2(6); // version
+        sav.p2(5); // version
 
         sav.p2(this.x);
         sav.p2(this.z);
@@ -249,18 +254,12 @@ export default class Player extends PathingEntity {
         // set the total saved inv count as the placeholder
         sav.data[invStartPos] = invCount;
 
-        // afk zones
         sav.p1(this.afkZones.length);
         for (let index: number = 0; index < this.afkZones.length; index++) {
             sav.p4(this.afkZones[index]);
         }
         sav.p2(this.lastAfkZone);
-
-        // chat modes
         sav.p1((this.publicChat << 4) | (this.privateChat << 2) | this.tradeDuel);
-
-        // last login info
-        sav.p8(this.lastDate);
 
         sav.p4(Packet.getcrc(sav.data, 0, sav.pos));
         return sav.data.subarray(0, sav.pos);
@@ -314,13 +313,12 @@ export default class Player extends PathingEntity {
     headicons: number = 0;
     appearance: number = -1;
     lastAppearance: number = 0;
-    lastAppearanceBytes: Uint8Array | null = null;
     baseLevels = new Uint8Array(21);
     lastStats: Int32Array = new Int32Array(21); // we track this so we know to flush stats only once a tick on changes
     lastLevels: Uint8Array = new Uint8Array(21); // we track this so we know to flush stats only once a tick on changes
     originX: number = -1;
     originZ: number = -1;
-    buildArea: BuildArea = new BuildArea(this);
+    buildArea: BuildArea = new BuildArea();
     basReadyAnim: number = -1;
     basTurnOnSpot: number = -1;
     basWalkForward: number = -1;
@@ -354,9 +352,9 @@ export default class Player extends PathingEntity {
     // ---
 
     // script variables
-    queue: LinkList<PlayerQueueRequest> = new LinkList();
-    weakQueue: LinkList<PlayerQueueRequest> = new LinkList();
-    engineQueue: LinkList<PlayerQueueRequest> = new LinkList();
+    queue: LinkList<EntityQueueRequest> = new LinkList();
+    weakQueue: LinkList<EntityQueueRequest> = new LinkList();
+    engineQueue: LinkList<EntityQueueRequest> = new LinkList();
     cameraPackets: LinkList<CameraInfo> = new LinkList();
     timers: Map<number, EntityTimer> = new Map();
     tabs: number[] = new Array(14).fill(-1);
@@ -402,10 +400,8 @@ export default class Player extends PathingEntity {
     socialProtect: boolean = false; // social packet spam protection
     reportAbuseProtect: boolean = false; // social packet spam protection
 
-    lastDate: bigint = 0n;
-
     constructor(username: string, username37: bigint, hash64: bigint) {
-        super(0, 3094, 3106, 1, 1, EntityLifeCycle.FOREVER, MoveRestrict.NORMAL, BlockWalk.NPC, MoveStrategy.SMART, PlayerInfoProt.FACE_COORD, PlayerInfoProt.FACE_ENTITY); // tutorial island.
+        super(0, 3094, 3106, 1, 1, EntityLifeCycle.FOREVER, MoveRestrict.NORMAL, BlockWalk.NPC, MoveStrategy.SMART, InfoProt.PLAYER_FACE_COORD.id, InfoProt.PLAYER_FACE_ENTITY.id); // tutorial island.
         this.username = username;
         this.username37 = username37;
         this.hash64 = hash64;
@@ -441,9 +437,6 @@ export default class Player extends PathingEntity {
         this.timers.clear();
         this.heroPoints.clear();
         this.buildArea.clear(false);
-        this.appearance = -1;
-        this.lastAppearance = 0;
-        this.lastAppearanceBytes = null;
         this.isActive = false;
     }
 
@@ -478,7 +471,7 @@ export default class Player extends PathingEntity {
         // - runenergy
         // - reset anims
         // - social
-        this.buildArea.rebuildNormal();
+        this.rebuildNormal();
         this.write(new ChatFilterSettings(this.publicChat, this.privateChat, this.tradeDuel));
         this.write(new IfClose());
         this.write(new UpdateUid192(this.pid));
@@ -523,7 +516,7 @@ export default class Player extends PathingEntity {
         // reload entity info (overkill? does the client have some logic around this?)
         this.buildArea.clear(true);
         // rebuild scene later this tick (note: rebuild won't run on the client if you're in the same zone!)
-        this.buildArea.rebuildNormal(true);
+        this.rebuildNormal(true);
         // in case of pending update
         if (World.isPendingShutdown) {
             const ticksBeforeShutdown = World.shutdownTicksRemaining;
@@ -781,7 +774,7 @@ export default class Player extends PathingEntity {
      * @param args
      */
     enqueueScript(script: ScriptFile, type: QueueType = PlayerQueueType.NORMAL, delay = 0, args: ScriptArgument[] = []) {
-        const request = new PlayerQueueRequest(type, script, args, delay);
+        const request = new EntityQueueRequest(type, script, args, delay);
         if (type === PlayerQueueType.ENGINE) {
             request.delay = 0;
             this.engineQueue.addTail(request);
@@ -1208,7 +1201,7 @@ export default class Player extends PathingEntity {
     }
 
     processInputTracking(): void {
-        this.input.onCycle();
+        this.input.process();
     }
 
     // ----
@@ -1320,7 +1313,6 @@ export default class Player extends PathingEntity {
         stream.release();
 
         this.lastAppearance = World.currentTick;
-        this.lastAppearanceBytes = appearance;
         return appearance;
     }
 
@@ -1761,7 +1753,7 @@ export default class Player extends PathingEntity {
 
     buildAppearance(inv: number): void {
         this.appearance = inv;
-        this.masks |= PlayerInfoProt.APPEARANCE;
+        this.masks |= InfoProt.PLAYER_APPEARANCE.id;
     }
 
     playAnimation(anim: number, delay: number) {
@@ -1772,7 +1764,7 @@ export default class Player extends PathingEntity {
         if (anim == -1 || this.animId == -1 || SeqType.get(anim).priority > SeqType.get(this.animId).priority || SeqType.get(this.animId).priority === 0) {
             this.animId = anim;
             this.animDelay = delay;
-            this.masks |= PlayerInfoProt.ANIM;
+            this.masks |= InfoProt.PLAYER_ANIM.id;
         }
     }
 
@@ -1780,7 +1772,7 @@ export default class Player extends PathingEntity {
         this.graphicId = spotanim;
         this.graphicHeight = height;
         this.graphicDelay = delay;
-        this.masks |= PlayerInfoProt.SPOT_ANIM;
+        this.masks |= InfoProt.PLAYER_SPOTANIM.id;
     }
 
     applyDamage(damage: number, type: number) {
@@ -1795,7 +1787,7 @@ export default class Player extends PathingEntity {
             this.levels[PlayerStat.HITPOINTS] = current - damage;
         }
 
-        this.masks |= PlayerInfoProt.DAMAGE;
+        this.masks |= InfoProt.PLAYER_DAMAGE.id;
     }
 
     setVisibility(visibility: Visibility) {
@@ -1818,7 +1810,7 @@ export default class Player extends PathingEntity {
 
     say(message: string) {
         this.chat = message;
-        this.masks |= PlayerInfoProt.SAY;
+        this.masks |= InfoProt.PLAYER_SAY.id;
     }
 
     faceSquare(x: number, z: number) {
@@ -1904,7 +1896,7 @@ export default class Player extends PathingEntity {
         this.exactMoveStart = startCycle;
         this.exactMoveEnd = endCycle;
         this.exactMoveDirection = direction;
-        this.masks |= PlayerInfoProt.EXACT_MOVE;
+        this.masks |= InfoProt.PLAYER_EXACT_MOVE.id;
 
         // todo: interpolate over time? instant teleport? verify with true tile on osrs
         this.x = endX;
@@ -1961,6 +1953,59 @@ export default class Player extends PathingEntity {
             return true;
         } else {
             return false;
+        }
+    }
+
+    rebuildZones(): void {
+        // update any newly tracked zones
+        this.buildArea.activeZones.clear();
+
+        const centerX = CoordGrid.zone(this.x);
+        const centerZ = CoordGrid.zone(this.z);
+
+        const originX: number = CoordGrid.zone(this.originX);
+        const originZ: number = CoordGrid.zone(this.originZ);
+
+        const leftX = originX - 6;
+        const rightX = originX + 6;
+        const topZ = originZ + 6;
+        const bottomZ = originZ - 6;
+
+        for (let x = centerX - 3; x <= centerX + 3; x++) {
+            for (let z = centerZ - 3; z <= centerZ + 3; z++) {
+                // check if the zone is within the build area
+                if (x < leftX || x > rightX || z > topZ || z < bottomZ) {
+                    continue;
+                }
+                this.buildArea.activeZones.add(ZoneMap.zoneIndex(x << 3, z << 3, this.level));
+            }
+        }
+    }
+
+    rebuildNormal(reconnect: boolean = false): void {
+        const originX: number = CoordGrid.zone(this.originX);
+        const originZ: number = CoordGrid.zone(this.originZ);
+
+        const reloadLeftX = (originX - 4) << 3;
+        const reloadRightX = (originX + 5) << 3;
+        const reloadTopZ = (originZ + 5) << 3;
+        const reloadBottomZ = (originZ - 4) << 3;
+
+        // if the build area should be regenerated, do so now
+        if (this.x < reloadLeftX || this.z < reloadBottomZ || this.x > reloadRightX - 1 || this.z > reloadTopZ - 1 || reconnect) {
+            // temp fix: invisible door issue (need a deeper dive)
+            for (const zone of this.buildArea.activeZones) {
+                const { x, z } = ZoneMap.unpackIndex(zone);
+                if (x < reloadLeftX || z < reloadBottomZ || x > reloadRightX - 1 || z > reloadTopZ - 1) {
+                    this.write(new UpdateZoneFullFollows(CoordGrid.zone(x), CoordGrid.zone(z), this.originX, this.originZ));
+                }
+            }
+
+            this.write(new RebuildNormal(CoordGrid.zone(this.x), CoordGrid.zone(this.z)));
+
+            this.originX = this.x;
+            this.originZ = this.z;
+            this.buildArea.loadedZones.clear();
         }
     }
 
@@ -2066,17 +2111,11 @@ export default class Player extends PathingEntity {
         this.write(new HintArrow(-1, 0, 0, 0, 0, 0));
     }
 
-    lastLoginInfo() {
+    lastLoginInfo(lastLoginIp: number, daysSinceLogin: number, daysSinceRecoveryChange: number) {
         // daysSinceRecoveryChange
         // - 201 shows welcome_screen.if
         // - any other value shows welcome_screen_warning
-        const lastDate: bigint = this.lastDate === 0n ? BigInt(Date.now()) : this.lastDate;
-        const nextDate: bigint = BigInt(Date.now());
-        const daysSinceLogin: number = Number(nextDate - lastDate) / (1000 * 60 * 60 * 24);
-        // proxying websockets through cf may show IPv6 and breaks anyways
-        // so we just hardcode 127.0.0.1 (2130706433)
-        this.write(new LastLoginInfo(2130706433, daysSinceLogin, 201, this.messageCount));
-        this.lastDate = nextDate;
+        this.write(new LastLoginInfo(lastLoginIp, daysSinceLogin, daysSinceRecoveryChange, this.messageCount));
     }
 
     logout(): void {
