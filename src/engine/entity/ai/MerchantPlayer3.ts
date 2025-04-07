@@ -52,6 +52,8 @@ export default class MerchantPlayer3 extends PlayerClass {
     private _buyAnnouncementInterval: ReturnType<typeof setInterval> | null = null;
     /** Maximum number of items to buy at once */
     private _maxBuyItems: number = 1;
+    /** Safe batch size for processing non-stackable items - maximum inventory capacity */
+    private static readonly SAFE_NON_STACKABLE_BATCH_SIZE: number = 28;
 
     /**
      * Create a new AI player at the specified coordinates
@@ -560,6 +562,28 @@ export default class MerchantPlayer3 extends PlayerClass {
             if (item.maxCount > 100) {
                 partner.messageGame('I\'m buying in bulk - bring as many as you want!');
             }
+            
+            // Determine if this is a non-stackable item
+            const isStackable = (itemId: number): boolean => {
+                // IDs of common stackable items (these CAN stack in inventory)
+                const STACKABLE_ITEM_RANGES = [
+                    [995, 995],       // Gold coins
+                    [554, 566],       // All runes
+                    [825, 892],       // Most arrows
+                    [1422, 1430],     // Darts
+                    [200, 220],       // Herb certificates
+                    [300, 400],       // Various food certificates  
+                    [518, 518],       // Weeds
+                    [1778, 1778],     // Molten glass
+                    [2349, 2363]      // Metal bars
+                ];
+                return STACKABLE_ITEM_RANGES.some(range => itemId >= range[0] && itemId <= range[1]);
+            };
+            
+            // Give non-stackable warning
+            if (!isStackable(item.id)) {
+                partner.messageGame(`Note: This is a non-stackable item. You can offer up to a full inventory (${MerchantPlayer3.SAFE_NON_STACKABLE_BATCH_SIZE}) at once.`);
+            }
         } else {
             partner.messageGame('I\'m not buying any items at the moment.');
         }
@@ -589,16 +613,6 @@ export default class MerchantPlayer3 extends PlayerClass {
 
             // Make sure we have gold in our inventory for buying
             this.addBuyingGold();
-
-            // Handle any current buying items if they exist
-            if (this._currentBuyingItems.length > 0) {
-                const item = this._currentBuyingItems[0];
-                printInfo(`[TRADE] AI '${this.username}' - Currently buying: ${item.name} (ID: ${item.id}) at ${item.price} gold each`);
-            } else {
-                printInfo(`[TRADE] AI '${this.username}' - Warning: No current buying items set`);
-                // Select random items to ensure we have something to buy
-                this.selectRandomItemsToBuy();
-            }
 
             // Set partner as target and use the proper opcode (OPPLAYER4 = trade)
             // This is what actually opens the trade
@@ -673,24 +687,11 @@ export default class MerchantPlayer3 extends PlayerClass {
                         }
                     }
                     
-                    // Safely get player offer with error handling
-                    let playerOffer: { id: number; count: number }[] = [];
-                    try {
-                        playerOffer = this.getTradeOffer(partner);
-                    } catch (err) {
-                        printError(`[TRADE] AI '${this.username}' - Error getting player offer: ${err}`);
-                    }
+                    // Get player offer
+                    const playerOffer = this.getTradeOffer(partner);
                     
-                    // Safely calculate offer value
-                    let totalValue = 0;
-                    let acceptedItems: { id: number; count: number; name: string; price: number }[] = [];
-                    try {
-                        const evaluated = this.evaluatePlayerOffer(playerOffer);
-                        totalValue = evaluated.totalValue;
-                        acceptedItems = evaluated.acceptedItems;
-                    } catch (err) {
-                        printError(`[TRADE] AI '${this.username}' - Error evaluating player offer: ${err}`);
-                    }
+                    // Evaluate the player's offer
+                    const { totalValue, acceptedItems } = this.evaluatePlayerOffer(playerOffer);
                     
                     // Process based on the value of the offer
                     if (totalValue > 0) {
@@ -702,8 +703,8 @@ export default class MerchantPlayer3 extends PlayerClass {
                                 // Clear our offer and update it to match current value
                                 this.clearTradeOffer();
                                 
-                                // Add a small delay to prevent client-server desync issues
-                                await new Promise(resolve => setTimeout(resolve, 50));
+                                // Add a small delay for server processing
+                                await this.delay(100);
                                 
                                 // Offer gold for the items with error handling
                                 await this.offerGoldForItems(totalValue);
@@ -711,17 +712,21 @@ export default class MerchantPlayer3 extends PlayerClass {
                                 // Remember the last offer value
                                 lastOfferValue = totalValue;
                                 
-                                // Only send a message if this is the first offer or the value changed significantly
+                                // Only send a message if this is the first offer
                                 if (!this._itemsOffered) {
                                     this._itemsOffered = true;
-                                    
+
                                     // Let the player know about the transaction
                                     try {
-                                        const itemText = acceptedItems.map(item => 
-                                            `${item.count}x ${item.name} at ${item.price} each`
-                                        ).join(', ');
-                                        
-                                        partner.messageGame(`I'll pay ${totalValue} gold for ${itemText}`);
+                                        // Summarize the accepted items instead of listing each one
+                                        if (acceptedItems.length > 0) {
+                                            const firstItem = acceptedItems[0];
+                                            const totalCount = acceptedItems.reduce((sum, item) => sum + item.count, 0);
+                                            // Assuming all accepted items are the same base type (item or cert) in this simple buyer case
+                                            const itemName = firstItem.name;
+                                            const itemPrice = firstItem.price;
+                                            partner.messageGame(`I'll pay ${totalValue} gold for ${totalCount}x ${itemName} at ${itemPrice} each.`);
+                                        }
                                     } catch (err) {
                                         printError(`[TRADE] AI '${this.username}' - Error sending offer message: ${err}`);
                                     }
@@ -749,10 +754,10 @@ export default class MerchantPlayer3 extends PlayerClass {
                                 this.setVar(258, 0); // Unaccept the trade
                                 this._itemsOffered = false;
                                 lastOfferValue = 0; // Reset last offer value
-                                
+
                                 // Clear our gold offer
                                 this.clearTradeOffer();
-                                
+
                                 // Let them know we don't want anything
                                 try {
                                     if (this._currentBuyingItems.length > 0) {
@@ -1201,8 +1206,30 @@ export default class MerchantPlayer3 extends PlayerClass {
             if (this._tradePartnerUid) {
                 const partner = World.getPlayerByUid(this._tradePartnerUid);
                 if (partner) {
+                    // Small delay before accepting to allow client/server sync
+                    await this.delay(50);
+                    
+                    // Set our trade status to accepting the confirmation
                     this.setVar(258, 3); // 258 is the tradestatus var ID
+                    
+                    // Send the visual notification to the player
                     partner.write(new IfSetText(3535, 'Other player has accepted.'));
+                    
+                    // Prevent short-term logout for the player
+                    partner.preventLogoutUntil = World.currentTick + 100;
+                    this.preventLogoutUntil = World.currentTick + 100;
+                    
+                    // Give some time for the trade to be processed
+                    await this.delay(150);
+                    
+                    // Check if trade is still valid
+                    if (this._tradePartnerUid && partner.isActive) {
+                        printInfo(`[TRADE] AI '${this.username}' - CONFIRM: Trade with ${partner.username} should now be completing`);
+                    } else {
+                        printInfo(`[TRADE] AI '${this.username}' - CONFIRM: Trade partner no longer valid during confirmation`);
+                    }
+                } else {
+                    printInfo(`[TRADE] AI '${this.username}' - CONFIRM: Trade partner not found in world, aborting`);
                 }
             } else {
                 printInfo(`[TRADE] AI '${this.username}' - CONFIRM: No trade partner UID, aborting confirmation`);
@@ -1243,12 +1270,49 @@ export default class MerchantPlayer3 extends PlayerClass {
         try {
             printInfo(`[TRADE] AI '${this.username}' - CLOSE: Trade has ended or was closed`);
 
-            // Clear trade partner and reset stage
+            // Get partner reference before clearing it
+            let partner = null;
+            if (this._tradePartnerUid) {
+                partner = World.getPlayerByUid(this._tradePartnerUid);
+            }
+
+            // Clean up the trade state
             this._tradePartnerUid = null;
             this._itemsOffered = false;
-
+            
             // Reset trade status var
             this.setVar(258, 0);
+            
+            // Ensure we clean up both sides of the trade
+            if (partner && partner.isActive) {
+                try {
+                    // Help the player clean up their trade state too
+                    partner.setVar(258, 0);
+                    
+                    // Prevent potential logout issues
+                    partner.preventLogoutUntil = World.currentTick + 100;
+                    partner.requestLogout = false;
+                    partner.requestIdleLogout = false;
+                    partner.loggingOut = false;
+                    
+                    printInfo(`[TRADE] AI '${this.username}' - Successfully cleaned up trade state for player ${partner.username}`);
+                } catch (err) {
+                    printError(`[TRADE] AI '${this.username}' - Error cleaning partner state: ${err}`);
+                }
+            }
+            
+            // Final safety check - ensure our inventory is valid
+            try {
+                // Give some time for server to stabilize
+                setTimeout(() => {
+                    if (this.active && this.isActive) {
+                        // Reset our gold to ensure we have enough for future trades
+                        this.addBuyingGold();
+                    }
+                }, 1000);
+            } catch (err) {
+                printError(`[TRADE] AI '${this.username}' - Error in post-trade cleanup: ${err}`);
+            }
         } catch (err) {
             printError(`[TRADE] AI '${this.username}' - ERROR: Error handling trade close: ${err}`);
         }
@@ -1504,8 +1568,7 @@ export default class MerchantPlayer3 extends PlayerClass {
                     printInfo(`[TRADE] AI '${this.username}' - Player offering: ItemID ${item.id} x${item.count}`);
                 });
             }
-            
-            // Go through each item the player is offering
+                            
             for (const offeredItem of playerOffer) {
                 // Safety check for invalid item counts (prevents overflow/underflow issues)
                 if (!offeredItem.count || offeredItem.count <= 0 || offeredItem.count > MAX_ACCEPTABLE_COUNT) {
@@ -1847,7 +1910,7 @@ export default class MerchantPlayer3 extends PlayerClass {
                 if (!success) {
                     try {
                         // Use the safe moveFromSlot wrapper that prevents NPEs
-                        this.safeInvMoveFromSlot(93, 90, foundSlot, goldAmount);
+                        await this.safeInvMoveFromSlot(93, 90, foundSlot, goldAmount);
                         success = true;
                         printInfo(`[TRADE] AI '${this.username}' - Added gold to trade window using moveFromSlot`);
                     } catch (err) {
@@ -1872,7 +1935,7 @@ export default class MerchantPlayer3 extends PlayerClass {
      * Safe wrapper for invMoveFromSlot that handles potential errors
      * This ensures we don't crash if the fromSlot doesn't exist
      */
-    private safeInvMoveFromSlot(fromInv: number, toInv: number, fromSlot: number, count: number): boolean {
+    private async safeInvMoveFromSlot(fromInv: number, toInv: number, fromSlot: number, count: number): Promise<boolean> {
         try {
             // First check if there's an item in the fromSlot
             const fromObj = this.invGetSlot(fromInv, fromSlot);
@@ -1881,23 +1944,19 @@ export default class MerchantPlayer3 extends PlayerClass {
                 return false;
             }
             
-            // Check if we need to split stack
-            if (fromObj.count > count) {
-                // We need to split the stack - first remove what we want from source
-                this.invDelSlot(fromInv, fromSlot);
-                
-                // Add the amount we want to move to the target inventory
-                this.invAdd(toInv, fromObj.id, count);
-                
-                // And put back the remainder in the source inventory
-                this.invSet(fromInv, fromObj.id, fromObj.count - count, fromSlot);
-                
-                return true;
-            } else {
-                // We can move the whole stack
-                const result = this.invMoveFromSlot(fromInv, toInv, fromSlot);
-                return result.overflow === 0;
-            }
+            // Simple approach - use the game's built-in invMoveFromSlot for gold, which is always a stackable item
+            // This should avoid the bug that was happening with non-stackable items
+            const itemId = fromObj.id;
+            const itemCount = Math.min(fromObj.count, count);
+            
+            // Use the standard move method
+            const result = this.invMoveFromSlot(fromInv, toInv, fromSlot);
+            
+            // Log the operation
+            printInfo(`[TRADE] AI '${this.username}' - Moved ${itemCount}x item ${itemId} from inv ${fromInv} to inv ${toInv}`);
+            
+            // Success if no overflow (this should be fine for gold which is stackable)
+            return result.overflow === 0;
         } catch (err) {
             printError(`[TRADE] AI '${this.username}' - Error in safeInvMoveFromSlot: ${err}`);
             return false;
@@ -1908,23 +1967,52 @@ export default class MerchantPlayer3 extends PlayerClass {
      * Update our item counts after a successful trade
      */
     private updateItemCounts(acceptedItems: { id: number; count: number; name: string; price: number }[]): void {
-        // Update our current item counts
-        for (const acceptedItem of acceptedItems) {
-            const buyableItem = this._merchantBuyList.find(item => item.id === acceptedItem.id);
-            if (buyableItem) {
-                buyableItem.currentCount += acceptedItem.count;
-                printInfo(`[TRADE] AI '${this.username}' - Updated count for ${buyableItem.name} to ${buyableItem.currentCount}`);
-                
-                // If we've reached our max, possibly update our buying list
-                if (buyableItem.currentCount >= buyableItem.maxCount) {
-                    printInfo(`[TRADE] AI '${this.username}' - Reached max count for ${buyableItem.name}`);
+        try {
+            // Log all items that are being processed
+            printInfo(`[TRADE] AI '${this.username}' - Processing ${acceptedItems.length} items after trade`);
+            
+            // Update our current item counts
+            for (const acceptedItem of acceptedItems) {
+                // Find the matching item in our buy list
+                const buyableItem = this._merchantBuyList.find(item => item.id === acceptedItem.id);
+                if (buyableItem) {
+                    // Calculate safe count to avoid integer overflow
+                    const newCount = Math.min(
+                        buyableItem.currentCount + acceptedItem.count,
+                        buyableItem.maxCount
+                    );
                     
-                    // 50% chance to select new items to buy if we've reached max
-                    if (Math.random() < 0.5) {
-                        this.selectRandomItemsToBuy();
+                    // Update with safe value
+                    const oldCount = buyableItem.currentCount;
+                    buyableItem.currentCount = newCount;
+                    
+                    printInfo(`[TRADE] AI '${this.username}' - Updated count for ${buyableItem.name} from ${oldCount} to ${newCount}`);
+                    
+                    // If we've reached our max, possibly update our buying list
+                    if (buyableItem.currentCount >= buyableItem.maxCount) {
+                        printInfo(`[TRADE] AI '${this.username}' - Reached max count for ${buyableItem.name}`);
+                        
+                        // 50% chance to select new items to buy if we've reached max
+                        if (Math.random() < 0.5) {
+                            this.selectRandomItemsToBuy();
+                        }
                     }
+                } else {
+                    // This shouldn't happen, but log it if it does
+                    printInfo(`[TRADE] AI '${this.username}' - Warning: Accepted item ${acceptedItem.id} not found in buy list`);
                 }
             }
+            
+            // Clear out any pending trade state that might interfere with future trades
+            this._itemsOffered = false;
+            
+            // Reset trade status to be safe
+            this.setVar(258, 0);
+        } catch (err) {
+            printError(`[TRADE] AI '${this.username}' - Error updating item counts: ${err}`);
+            // Even if there's an error, make sure we clean up
+            this._itemsOffered = false;
+            this.setVar(258, 0);
         }
     }
 
