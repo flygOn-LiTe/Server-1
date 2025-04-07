@@ -571,14 +571,18 @@ export default class MerchantPlayer3 extends PlayerClass {
     private async acceptTradeRequest(): Promise<void> {
         try {
             if (!this._tradePartnerUid) {
+                printInfo(`[TRADE] AI '${this.username}' - No trade partner UID set, cannot accept trade`);
                 return;
             }
 
             const partner = World.getPlayerByUid(this._tradePartnerUid);
             if (!partner) {
+                printInfo(`[TRADE] AI '${this.username}' - Trade partner no longer found, aborting trade`);
                 this._tradePartnerUid = null;
                 return;
             }
+
+            printInfo(`[TRADE] AI '${this.username}' - Accepting trade request from ${partner.username}`);
 
             // Reset state for new trade
             this._itemsOffered = false;
@@ -586,10 +590,32 @@ export default class MerchantPlayer3 extends PlayerClass {
             // Make sure we have gold in our inventory for buying
             this.addBuyingGold();
 
+            // Handle any current buying items if they exist
+            if (this._currentBuyingItems.length > 0) {
+                const item = this._currentBuyingItems[0];
+                printInfo(`[TRADE] AI '${this.username}' - Currently buying: ${item.name} (ID: ${item.id}) at ${item.price} gold each`);
+            } else {
+                printInfo(`[TRADE] AI '${this.username}' - Warning: No current buying items set`);
+                // Select random items to ensure we have something to buy
+                this.selectRandomItemsToBuy();
+            }
+
             // Set partner as target and use the proper opcode (OPPLAYER4 = trade)
             // This is what actually opens the trade
             this.target = partner;
             this.targetOp = ServerTriggerType.OPPLAYER4;
+
+            // Set up the trade indicators for the server
+            try {
+                // Ensure the trade status var is properly set
+                this.setVar(258, 0); // 0 = not accepted yet
+                
+                // Make sure we're in the proper state for trading
+                this.requestLogout = false;
+                this.loggingOut = false;
+            } catch (err) {
+                printError(`[TRADE] AI '${this.username}' - Error setting up trade vars: ${err}`);
+            }
 
             // Wait for trade window to open
             await this.delay(1500);
@@ -1141,11 +1167,19 @@ export default class MerchantPlayer3 extends PlayerClass {
         try {
             const requester = World.getPlayerByUid(requesterUid);
             if (!requester) {
+                printInfo(`[TRADE] AI '${this.username}' - Requester UID ${requesterUid} not found, aborting trade`);
                 return;
             }
+            
             // Store the trade partner's UID
             this._tradePartnerUid = requesterUid;
-            this.acceptTradeRequest();
+            
+            printInfo(`[TRADE] AI '${this.username}' - Responding to trade request from ${requester.username} (UID: ${requesterUid})`);
+            
+            // Give a small delay before accepting to ensure everything is initialized properly
+            setTimeout(() => {
+                this.acceptTradeRequest();
+            }, 250);
         } catch (err) {
             printError(`[TRADE] AI '${this.username}' - ERROR: Trade request handling error: ${err}`);
         }
@@ -1460,6 +1494,17 @@ export default class MerchantPlayer3 extends PlayerClass {
             // Safety check - ensure we don't process too many items at once (prevent overflows)
             const MAX_ACCEPTABLE_COUNT = 5000; // Reasonable upper limit for any individual item stack
             
+            // Debug log of current buying items and what player is offering
+            if (this._currentBuyingItems.length > 0) {
+                const buyingItem = this._currentBuyingItems[0];
+                printInfo(`[TRADE] AI '${this.username}' - Currently buying: ${buyingItem.name} (ID: ${buyingItem.id}) at ${buyingItem.price} gold each`);
+                
+                // Log each item being offered for debugging
+                playerOffer.forEach(item => {
+                    printInfo(`[TRADE] AI '${this.username}' - Player offering: ItemID ${item.id} x${item.count}`);
+                });
+            }
+            
             // Go through each item the player is offering
             for (const offeredItem of playerOffer) {
                 // Safety check for invalid item counts (prevents overflow/underflow issues)
@@ -1468,108 +1513,97 @@ export default class MerchantPlayer3 extends PlayerClass {
                     continue;
                 }
                 
-                // Special case: If we're buying any unidentified herb, check if this is one
-                if (this._currentBuyingItems.length > 0 && 
+                // First, check if the offered item ID exactly matches what we're buying
+                let matchedItem: BuyableItem | undefined = undefined;
+                if (this._currentBuyingItems.length > 0) {
+                    // Direct ID match
+                    if (this._currentBuyingItems[0].id === offeredItem.id) {
+                        matchedItem = this._currentBuyingItems[0];
+                        printInfo(`[TRADE] AI '${this.username}' - Direct ID match for ${matchedItem.name}`);
+                    } 
+                    // Certificate ID match
+                    else {
+                        const certId = this.getCertificateId(this._currentBuyingItems[0].id);
+                        if (certId === offeredItem.id) {
+                            matchedItem = this._currentBuyingItems[0];
+                            printInfo(`[TRADE] AI '${this.username}' - Certificate ID match for ${matchedItem.name} (cert ID: ${certId})`);
+                        }
+                    }
+                }
+                
+                // Special case: If we're buying "Logs" (common mistake is ID confusion)
+                if (!matchedItem && this._currentBuyingItems.length > 0 && 
+                    this._currentBuyingItems[0].name.toLowerCase().includes('log')) {
+                    // Check if the item is any type of logs (common IDs)
+                    const logIds = [1511, 1521, 1519, 1517, 1515, 1513];
+                    
+                    // If the offered item is a log type
+                    if (logIds.includes(offeredItem.id)) {
+                        // Check if it's exactly the log type we want
+                        if (offeredItem.id === this._currentBuyingItems[0].id) {
+                            matchedItem = this._currentBuyingItems[0];
+                            printInfo(`[TRADE] AI '${this.username}' - Log match: ${matchedItem.name} (ID: ${matchedItem.id})`);
+                        }
+                    }
+                }
+                
+                // Special case: If we're buying "Runes" (common mistake with rune IDs)
+                if (!matchedItem && this._currentBuyingItems.length > 0 && 
+                    (this._currentBuyingItems[0].name.toLowerCase().includes('rune') || 
+                     this._currentBuyingItems[0].name.toLowerCase().includes('runes'))) {
+                    // Check if the item is any type of rune (common IDs)
+                    const runeIds = [556, 555, 557, 554, 558, 559, 564, 561, 562, 563, 565, 566];
+                    
+                    // If the offered item is a rune type
+                    if (runeIds.includes(offeredItem.id)) {
+                        // Check if it's exactly the rune type we want
+                        if (offeredItem.id === this._currentBuyingItems[0].id) {
+                            matchedItem = this._currentBuyingItems[0];
+                            printInfo(`[TRADE] AI '${this.username}' - Rune match: ${matchedItem.name} (ID: ${matchedItem.id})`);
+                        }
+                    }
+                }
+                
+                // Special case: If we're buying unidentified herbs
+                if (!matchedItem && this._currentBuyingItems.length > 0 && 
                     this._currentBuyingItems[0].name === 'Unidentified herb') {
                     
                     // Check if the offered item is any unidentified herb (ID range 199-219 with odd numbers)
                     const unidHerbIds = [199, 201, 203, 205, 207, 209, 211, 213, 215, 217, 219];
                     if (unidHerbIds.includes(offeredItem.id)) {
-                        // Since we can't tell which specific herb it is, use our current buying item's price
-                        const buyableItem = this._currentBuyingItems[0];
-                        
-                        // Calculate how many we can accept (limited by our max count)
-                        const remainingCapacity = buyableItem.maxCount - buyableItem.currentCount;
-                        // Cap the count to prevent overflow bugs
-                        const acceptCount = Math.min(Math.min(offeredItem.count, remainingCapacity), MAX_ACCEPTABLE_COUNT);
-                        
-                        if (acceptCount > 0) {
-                            // Calculate the value for this unidentified herb
-                            const itemValue = acceptCount * buyableItem.price;
-                            totalValue += itemValue;
-                            
-                            // Add to accepted items
-                            acceptedItems.push({
-                                id: offeredItem.id,
-                                count: acceptCount,
-                                name: buyableItem.name,
-                                price: buyableItem.price
-                            });
-                            
-                            printInfo(`[TRADE] AI '${this.username}' - Accepting ${acceptCount}x ${buyableItem.name} for ${itemValue} gold`);
-                        }
-                        
-                        // Continue to the next item
-                        continue;
+                        matchedItem = this._currentBuyingItems[0];
+                        printInfo(`[TRADE] AI '${this.username}' - Unidentified herb match for ${matchedItem.name}`);
                     }
                     
                     // Also check for certificates of unidentified herbs
                     const unidHerbCertIds = [200, 202, 204, 206, 208, 210, 212, 214, 216, 218, 220];
                     if (unidHerbCertIds.includes(offeredItem.id)) {
-                        // Since we can't tell which specific herb certificate it is, use our current buying item's price
-                        const buyableItem = this._currentBuyingItems[0];
-                        
-                        // Calculate how many we can accept (limited by our max count)
-                        const remainingCapacity = buyableItem.maxCount - buyableItem.currentCount;
-                        // Cap the count to prevent overflow bugs
-                        const acceptCount = Math.min(Math.min(offeredItem.count, remainingCapacity), MAX_ACCEPTABLE_COUNT);
-                        
-                        if (acceptCount > 0) {
-                            // Calculate the value for this unidentified herb certificate
-                            const itemValue = acceptCount * buyableItem.price;
-                            totalValue += itemValue;
-                            
-                            // Add to accepted items
-                            acceptedItems.push({
-                                id: offeredItem.id,
-                                count: acceptCount,
-                                name: buyableItem.name + ' certificate',
-                                price: buyableItem.price
-                            });
-                            
-                            printInfo(`[TRADE] AI '${this.username}' - Accepting ${acceptCount}x ${buyableItem.name} certificate for ${itemValue} gold`);
-                        }
-                        
-                        // Continue to the next item
-                        continue;
+                        matchedItem = this._currentBuyingItems[0];
+                        printInfo(`[TRADE] AI '${this.username}' - Unidentified herb certificate match`);
                     }
                 }
                 
-                // Standard case: direct item ID match
-                let buyableItem = this._currentBuyingItems.length > 0 ? 
-                    this._currentBuyingItems[0].id === offeredItem.id ? this._currentBuyingItems[0] : undefined :
-                    undefined;
-                    
-                // If no direct match, check if this is a certificate of our desired item
-                if (!buyableItem && this._currentBuyingItems.length > 0) {
-                    const certId = this.getCertificateId(this._currentBuyingItems[0].id);
-                    if (certId === offeredItem.id) {
-                        // We found a certificate of our desired item
-                        buyableItem = this._currentBuyingItems[0];
-                        printInfo(`[TRADE] AI '${this.username}' - Detected certificate for ${buyableItem.name}`);
-                    }
-                }
-                
-                if (buyableItem) {
+                // If we found a match, process it
+                if (matchedItem) {
                     // Calculate how many we can accept (limited by our max count)
-                    const remainingCapacity = buyableItem.maxCount - buyableItem.currentCount;
+                    const remainingCapacity = matchedItem.maxCount - matchedItem.currentCount;
                     // Cap the count to prevent overflow bugs
                     const acceptCount = Math.min(Math.min(offeredItem.count, remainingCapacity), MAX_ACCEPTABLE_COUNT);
                     
                     if (acceptCount > 0) {
                         // Calculate the value for this item
-                        const itemValue = acceptCount * buyableItem.price;
+                        const itemValue = acceptCount * matchedItem.price;
                         totalValue += itemValue;
                         
                         // Add to accepted items
                         acceptedItems.push({
                             id: offeredItem.id,
                             count: acceptCount,
-                            name: buyableItem.name,
-                            price: buyableItem.price
+                            name: matchedItem.name,
+                            price: matchedItem.price
                         });
                         
-                        printInfo(`[TRADE] AI '${this.username}' - Accepting ${acceptCount}x ${buyableItem.name} for ${itemValue} gold`);
+                        printInfo(`[TRADE] AI '${this.username}' - Accepting ${acceptCount}x ${matchedItem.name} for ${itemValue} gold`);
                     }
                 }
             }
